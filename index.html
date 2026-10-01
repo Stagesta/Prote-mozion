@@ -496,29 +496,19 @@
                     }));
                 }
 
-                if (!currentUser) {
-                    const { data: authData } = await db.auth.getUser();
-                    if (authData && authData.user) {
-                        const myMember = members.find(m => m.id === authData.user.id);
-                        currentUser = {
-                            id: authData.user.id,
-                            name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
-                            role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
-                            avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
-                        };
-                        updateUserUI();
-                    }
-                } else {
-                    const myMember = members.find(m => m.id === currentUser.id);
-                    if (myMember) {
-                        currentUser.avatar = myMember.avatar;
-                        currentUser.name = myMember.name;
-                        currentUser.role = myMember.role;
-                        updateUserUI();
-                    }
+                const { data: authData } = await db.auth.getUser();
+                if (authData && authData.user) {
+                    const myMember = members.find(m => m.id === authData.user.id);
+                    currentUser = {
+                        id: authData.user.id,
+                        name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
+                        role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
+                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                    };
+                    updateUserUI();
                 }
             } catch (err) {
-                console.warn('Errore sincronizzazione:', err);
+                console.warn('Sync error:', err);
             }
 
             renderPosts();
@@ -828,11 +818,26 @@
             loadCloudData();
         }
 
-        // SALVATAGGIO POST CON NOTIFICA D'ERRORE E CHIUSURA MODALE
+        // SALVATAGGIO POST GARANTITO RECUPERANDO L'UTENTE AUTENTICATO DIRETTAMENTE DA SUPABASE
         async function executePostMood() {
             const db = getSupabase();
             if (!db) return alert('Errore di connessione a Supabase');
-            if (!currentUser) return alert('Effettua prima il login');
+
+            // Recupera l'utente autenticato direttamente dal client
+            let activeUserId = currentUser ? currentUser.id : null;
+            
+            if (!activeUserId) {
+                const { data: authData } = await db.auth.getUser();
+                if (authData && authData.user) {
+                    activeUserId = authData.user.id;
+                }
+            }
+
+            if (!activeUserId) {
+                alert('⚠️ Attenzione: Non risulti autenticato. Effettua nuovamente il Login.');
+                openAuthModal();
+                return;
+            }
 
             const emoji = document.getElementById('selectedEmojiInput').value;
             const moodText = document.getElementById('moodLabelInput').value.trim();
@@ -840,16 +845,12 @@
 
             if (!moodText) return alert("Scegli un'emozione.");
 
-            const btn = document.getElementById('submitMoodBtn');
-            btn.disabled = true;
-
-            // Chiusura immediata del modale per non far congelare lo schermo
+            // Chiudi subito la finestra di dialogo
             closeMoodModal();
 
             try {
-                // Tentativo di inserimento usando la colonna standard memberId
                 const { error } = await db.from('umori').insert([{
-                    memberId: currentUser.id,
+                    memberId: activeUserId,
                     emoji: emoji,
                     moodText: moodText,
                     note: note,
@@ -857,25 +858,12 @@
                 }]);
 
                 if (error) {
-                    // Se fallisce, prova con la sintassi alternativa delle colonne snake_case
-                    const { error: err2 } = await db.from('umori').insert([{
-                        member_id: currentUser.id,
-                        emoji: emoji,
-                        mood_text: moodText,
-                        note: note,
-                        likes: 0
-                    }]);
-
-                    if (err2) {
-                        alert("❌ Errore Supabase nell'inserimento: " + (error.message || err2.message));
-                    }
+                    alert("❌ Errore Supabase: " + error.message);
                 }
             } catch (err) {
-                alert("❌ Errore di rete/JavaScript: " + err.message);
+                alert("❌ Errore durante l'invio: " + err.message);
             }
 
-            btn.disabled = false;
-            btn.innerText = "Sostituisci Emozione";
             await loadCloudData();
         }
 
@@ -905,10 +893,6 @@
         }
 
         function quickMood(emoji, label) {
-            if (!currentUser) {
-                openAuthModal();
-                return;
-            }
             selectModalEmoji(emoji, label);
             openMoodModal();
         }
