@@ -172,10 +172,12 @@
             <div id="emptyFeedState" class="glass-panel p-12 rounded-3xl text-center flex flex-col items-center justify-center border-2 border-dashed border-credem-green-200 dark:border-credem-green-800">
                 <div class="text-5xl mb-3">🌱</div>
                 <h3 class="text-lg font-bold text-credem-green-800 dark:text-credem-yellow-400">Nessuna emozione inserita oggi</h3>
-                <p class="text-sm text-gray-500 dark:text-emerald-300 mt-1">Sii il primo ad accedere e condividere la tua emozione di oggi nella rete TWL!</p>
-                <button onclick="openAuthModal()" class="mt-4 px-5 py-2.5 credem-btn-yellow font-black rounded-xl text-xs shadow-md">
-                    Accedi o Registrati Ora
-                </button>
+                <p class="text-sm text-gray-500 dark:text-emerald-300 mt-1">Sii il primo a condividere la tua emozione di oggi nella rete TWL!</p>
+                <div id="emptyFeedBtnContainer" class="mt-4">
+                    <button onclick="openAuthModal()" class="px-5 py-2.5 credem-btn-yellow font-black rounded-xl text-xs shadow-md">
+                        Accedi o Registrati Ora
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -384,6 +386,7 @@
 
         const postsContainer = document.getElementById('postsContainer');
         const emptyFeedState = document.getElementById('emptyFeedState');
+        const emptyFeedBtnContainer = document.getElementById('emptyFeedBtnContainer');
         const membersListContainer = document.getElementById('membersListContainer');
         const memberCountBadge = document.getElementById('memberCountBadge');
         const totalPostsBadge = document.getElementById('totalPostsBadge');
@@ -466,21 +469,28 @@
             renderPosts();
         }
 
+        function getStartOfTodayLocalISO() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}T00:00:00`;
+        }
+
         async function loadCloudData() {
             const db = getSupabase();
             if (!db) return;
 
             try {
-                // Carica la lista dei membri
                 const { data: membersData } = await db.from('membri').select('*');
-                if (membersData && membersData.length > 0) {
-                    members = membersData;
-                }
+                if (membersData && membersData.length > 0) members = membersData;
 
-                // Carica tutti gli ultimi post
+                const startOfTodayISO = getStartOfTodayLocalISO();
+
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
+                    .gte('created_at', startOfTodayISO)
                     .order('id', { ascending: false });
 
                 if (postsData) {
@@ -496,7 +506,6 @@
                     }));
                 }
 
-                // Controlla la sessione attiva
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = members.find(m => m.id === authData.user.id);
@@ -507,7 +516,6 @@
                         avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
                     };
 
-                    // Assicurati che l'utente loggato compaia anche tra i membri se non c'era
                     if (!members.some(m => m.id === currentUser.id)) {
                         members.unshift({
                             id: currentUser.id,
@@ -534,17 +542,14 @@
 
             historyPostsContainer.innerHTML = '<div class="text-center py-8 text-xs text-emerald-600 animate-pulse">Caricamento storico...</div>';
 
-            const startDate = new Date(dateString);
-            startDate.setHours(0, 0, 0, 0);
-            
-            const endDate = new Date(dateString);
-            endDate.setHours(23, 59, 59, 999);
+            const startDate = `${dateString}T00:00:00`;
+            const endDate = `${dateString}T23:59:59`;
 
             const { data: historyData } = await db
                 .from('umori')
                 .select('*')
-                .gte('created_at', startDate.toISOString())
-                .lte('created_at', endDate.toISOString())
+                .gte('created_at', startDate)
+                .lte('created_at', endDate)
                 .order('id', { ascending: false });
 
             if (!historyData || historyData.length === 0) {
@@ -599,6 +604,15 @@
                     </div>
                 `;
                 if (openNewMoodModalBtn) openNewMoodModalBtn.classList.remove('hidden');
+
+                // Adatta il pulsante nella bacheca vuota se l'utente è loggato
+                if (emptyFeedBtnContainer) {
+                    emptyFeedBtnContainer.innerHTML = `
+                        <button onclick="openMoodModal()" class="px-5 py-2.5 credem-btn-yellow font-black rounded-xl text-xs shadow-md">
+                            Condividi la tua Emozione
+                        </button>
+                    `;
+                }
             } else {
                 userHeaderSection.innerHTML = `
                     <button onclick="openAuthModal()" class="credem-btn-yellow font-extrabold px-4 py-2 rounded-2xl text-xs sm:text-sm shadow-md transition hover:scale-105 active:scale-95 flex items-center gap-2 border border-credem-yellow-300">
@@ -607,6 +621,14 @@
                     </button>
                 `;
                 if (openNewMoodModalBtn) openNewMoodModalBtn.classList.add('hidden');
+
+                if (emptyFeedBtnContainer) {
+                    emptyFeedBtnContainer.innerHTML = `
+                        <button onclick="openAuthModal()" class="px-5 py-2.5 credem-btn-yellow font-black rounded-xl text-xs shadow-md">
+                            Accedi o Registrati Ora
+                        </button>
+                    `;
+                }
             }
         }
 
@@ -754,7 +776,7 @@
             const fileInput = document.getElementById('regFileInput');
             let avatar = document.getElementById('regAvatarInput').value.trim();
 
-            if (!name || !role || !email || !password) return alert("⚠️ Compila tutti i campi.");
+            if (!name || !role || !email || !password) return alert("⚠️️ Compila tutti i campi.");
 
             const btn = document.getElementById('regSubmitBtn');
             btn.disabled = true;
@@ -830,7 +852,7 @@
             loadCloudData();
         }
 
-        // SALVATAGGIO CON REFRESH LOCALE ED ANTEPRIMA SUBITO VISIBILE
+        // SALVATAGGIO POST TOLLERANTE SU ENTRAMBE LE VARIANTI DI COLONNA
         async function executePostMood() {
             const db = getSupabase();
             if (!db) return alert('Errore di connessione a Supabase');
@@ -857,8 +879,8 @@
 
             closeMoodModal();
 
-            // Aggiungi subito il post nell'interfaccia locale per un riscontro immediato
-            const newPostLocal = {
+            // Anteprima locale immediata
+            const localPost = {
                 id: Date.now(),
                 memberId: activeUserId,
                 emoji: emoji,
@@ -869,11 +891,20 @@
                 liked: false
             };
 
-            moodPosts.unshift(newPostLocal);
+            moodPosts = moodPosts.filter(p => p.memberId !== activeUserId);
+            moodPosts.unshift(localPost);
             renderPosts();
 
             try {
-                // Invia a Supabase
+                const startOfTodayISO = getStartOfTodayLocalISO();
+
+                // Elimina post precedente di oggi per sovrascrivere l'emozione
+                await db.from('umori')
+                    .delete()
+                    .eq('memberId', activeUserId)
+                    .gte('created_at', startOfTodayISO);
+
+                // Prova inserimento con camelCase
                 const { error } = await db.from('umori').insert([{
                     memberId: activeUserId,
                     emoji: emoji,
@@ -883,7 +914,7 @@
                 }]);
 
                 if (error) {
-                    console.warn("Retrying with snake_case fallback...", error);
+                    // Fallback con snake_case
                     await db.from('umori').insert([{
                         member_id: activeUserId,
                         emoji: emoji,
@@ -893,7 +924,7 @@
                     }]);
                 }
             } catch (err) {
-                console.warn("Background sync post error:", err);
+                console.warn("Post sync error:", err);
             }
 
             await loadCloudData();
@@ -904,7 +935,11 @@
 
             const db = getSupabase();
             if (db && currentUser) {
-                await db.from('umori').delete().eq('memberId', currentUser.id);
+                const startOfTodayISO = getStartOfTodayLocalISO();
+                await db.from('umori')
+                    .delete()
+                    .eq('memberId', currentUser.id)
+                    .gte('created_at', startOfTodayISO);
             }
 
             await loadCloudData();
