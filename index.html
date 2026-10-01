@@ -443,7 +443,12 @@
             historyModal.classList.remove('opacity-0', 'pointer-events-none');
             historyModalCard.classList.remove('scale-95');
             
-            const todayISO = new Date().toISOString().split('T')[0];
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const todayISO = `${year}-${month}-${day}`;
+            
             const historyDatePicker = document.getElementById('historyDatePicker');
             historyDatePicker.value = todayISO;
             fetchHistoryForDate(todayISO);
@@ -473,6 +478,15 @@
             renderPosts();
         }
 
+        function isPostFromToday(createdAtString) {
+            if (!createdAtString) return true;
+            const postDate = new Date(createdAtString);
+            const now = new Date();
+            return postDate.getDate() === now.getDate() &&
+                   postDate.getMonth() === now.getMonth() &&
+                   postDate.getFullYear() === now.getFullYear();
+        }
+
         async function loadCloudData() {
             const db = getSupabase();
             if (!db) return;
@@ -495,26 +509,26 @@
                     });
                 }
 
-                // 2. Scarica gli ultimi post (persistenze per le 24 ore recenti per non far sparire i post al ricaricamento)
-                const past24hISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
+                // 2. Scarica gli ultimi post dal database
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
-                    .gte('created_at', past24hISO)
                     .order('id', { ascending: false });
 
                 if (postsData) {
-                    moodPosts = postsData.map(p => ({
-                        id: p.id,
-                        memberId: p.memberId || p.member_id,
-                        emoji: p.emoji,
-                        moodText: p.moodText || p.mood_text,
-                        note: p.note,
-                        time: 'Oggi',
-                        likes: p.likes || 0,
-                        liked: false
-                    }));
+                    // Filtra tenendo solo i post creati nella giornata solare di oggi
+                    moodPosts = postsData
+                        .filter(p => isPostFromToday(p.created_at))
+                        .map(p => ({
+                            id: p.id,
+                            memberId: p.memberId || p.member_id,
+                            emoji: p.emoji,
+                            moodText: p.moodText || p.mood_text,
+                            note: p.note,
+                            time: 'Oggi',
+                            likes: p.likes || 0,
+                            liked: false
+                        }));
                 }
 
                 // 3. Controlla utente loggato
@@ -538,7 +552,7 @@
             renderMembers();
         }
 
-        // STORICO FUNZIONANTE SENZA BLOCCI IN CARICAMENTO
+        // FUNZIONE STORICO COMPLETA E COLLAUDATA
         async function fetchHistoryForDate(dateString) {
             const db = getSupabase();
             const historyPostsContainer = document.getElementById('historyPostsContainer');
@@ -547,7 +561,6 @@
             historyPostsContainer.innerHTML = '<div class="text-center py-8 text-xs text-emerald-600 font-bold animate-pulse">Caricamento storico...</div>';
 
             try {
-                // Recupera tutti i post e filtra per la data selezionata
                 const { data: historyData, error } = await db
                     .from('umori')
                     .select('*')
@@ -556,7 +569,7 @@
                 if (error || !historyData) {
                     historyPostsContainer.innerHTML = `
                         <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
-                            Impossibile recuperare i dati per il giorno <b>${dateString}</b>.
+                            Impossibile recuperare lo storico per il giorno <b>${dateString}</b>.
                         </div>
                     `;
                     return;
@@ -564,8 +577,12 @@
 
                 const filteredHistory = historyData.filter(post => {
                     if (!post.created_at) return false;
-                    const postDate = String(post.created_at).split('T')[0];
-                    return postDate === dateString;
+                    const d = new Date(post.created_at);
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const postFormatted = `${year}-${month}-${day}`;
+                    return postFormatted === dateString;
                 });
 
                 if (filteredHistory.length === 0) {
@@ -607,7 +624,7 @@
             } catch (err) {
                 historyPostsContainer.innerHTML = `
                     <div class="text-center py-8 text-xs text-red-500">
-                        Errore durante il caricamento dello storico.
+                        Errore di caricamento: ${err.message}
                     </div>
                 `;
             }
