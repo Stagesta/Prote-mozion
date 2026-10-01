@@ -371,7 +371,9 @@
         function getSupabase() {
             if (!clientSupabase) {
                 if (window.supabase && window.supabase.createClient) {
-                    clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                    clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+                        auth: { persistSession: true }
+                    });
                 } else {
                     alert("⚠️ Attenzione: Impossibile caricare il client Supabase. Verifica la connessione.");
                 }
@@ -701,7 +703,7 @@
             });
         }
 
-        // FUNZIONE DI LOGIN OTTIMIZZATA PER CHIUDERE SUBITO IL MODALE
+        // LOGIN CORRETTO CON CHIUSURA FORZATA DEL MODALE
         async function executeLogin() {
             const db = getSupabase();
             if (!db) return alert("❌ Errore: Impossibile connettersi a Supabase.");
@@ -729,36 +731,28 @@
                 }
 
                 if (data && data.user) {
+                    const myMember = members.find(m => m.id === data.user.id);
+                    
                     currentUser = {
                         id: data.user.id,
-                        name: data.user.user_metadata?.name || email.split('@')[0],
-                        role: data.user.user_metadata?.role || 'Aderente',
-                        avatar: data.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                        name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
+                        role: myMember?.role || data.user.user_metadata?.role || 'Aderente',
+                        avatar: myMember?.avatar || data.user.user_metadata?.avatar || 'https://picsum.photos/200'
                     };
 
-                    // Prova a salvare nelle tabelle ma non bloccare l'interfaccia in caso di errore
-                    try {
-                        await db.from('membri').upsert([{
-                            id: currentUser.id,
-                            name: currentUser.name,
-                            role: currentUser.role,
-                            avatar: currentUser.avatar
-                        }]);
-                    } catch (e) {
-                        console.warn("Salvattaggio profilo silenzioso:", e);
-                    }
+                    btn.disabled = false;
+                    btn.innerText = "Accedi Ora";
 
-                    // CHIUSURA IMMEDIATA DEL MODALE
+                    // SBLOCCO E CHIUSURA
                     closeAuthModal();
                     updateUserUI();
                     await loadCloudData();
                 }
             } catch (err) {
                 alert("❌ Errore imprevisto: " + err.message);
+                btn.disabled = false;
+                btn.innerText = "Accedi Ora";
             }
-
-            btn.disabled = false;
-            btn.innerText = "Accedi Ora";
         }
 
         // REGISTRAZIONE DIRETTA
