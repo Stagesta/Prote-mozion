@@ -471,16 +471,16 @@
             if (!db) return;
 
             try {
+                // Carica la lista dei membri
                 const { data: membersData } = await db.from('membri').select('*');
-                if (membersData) members = membersData;
+                if (membersData && membersData.length > 0) {
+                    members = membersData;
+                }
 
-                const startOfToday = new Date();
-                startOfToday.setHours(0, 0, 0, 0);
-
+                // Carica tutti gli ultimi post
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
-                    .gte('created_at', startOfToday.toISOString())
                     .order('id', { ascending: false });
 
                 if (postsData) {
@@ -496,6 +496,7 @@
                     }));
                 }
 
+                // Controlla la sessione attiva
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = members.find(m => m.id === authData.user.id);
@@ -505,6 +506,17 @@
                         role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
                         avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
                     };
+
+                    // Assicurati che l'utente loggato compaia anche tra i membri se non c'era
+                    if (!members.some(m => m.id === currentUser.id)) {
+                        members.unshift({
+                            id: currentUser.id,
+                            name: currentUser.name,
+                            role: currentUser.role,
+                            avatar: currentUser.avatar
+                        });
+                    }
+
                     updateUserUI();
                 }
             } catch (err) {
@@ -614,9 +626,9 @@
 
             filtered.forEach(post => {
                 const author = members.find(m => m.id === post.memberId) || {
-                    name: 'Aderente TWL',
-                    avatar: 'https://picsum.photos/150',
-                    role: 'Membro Community'
+                    name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Aderente TWL',
+                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/150',
+                    role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Membro Community'
                 };
 
                 const isMyPost = currentUser && post.memberId === currentUser.id;
@@ -818,14 +830,12 @@
             loadCloudData();
         }
 
-        // SALVATAGGIO POST GARANTITO RECUPERANDO L'UTENTE AUTENTICATO DIRETTAMENTE DA SUPABASE
+        // SALVATAGGIO CON REFRESH LOCALE ED ANTEPRIMA SUBITO VISIBILE
         async function executePostMood() {
             const db = getSupabase();
             if (!db) return alert('Errore di connessione a Supabase');
 
-            // Recupera l'utente autenticato direttamente dal client
             let activeUserId = currentUser ? currentUser.id : null;
-            
             if (!activeUserId) {
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
@@ -834,7 +844,7 @@
             }
 
             if (!activeUserId) {
-                alert('⚠️ Attenzione: Non risulti autenticato. Effettua nuovamente il Login.');
+                alert('⚠️ Non risulti loggato. Effettua il Login.');
                 openAuthModal();
                 return;
             }
@@ -845,10 +855,25 @@
 
             if (!moodText) return alert("Scegli un'emozione.");
 
-            // Chiudi subito la finestra di dialogo
             closeMoodModal();
 
+            // Aggiungi subito il post nell'interfaccia locale per un riscontro immediato
+            const newPostLocal = {
+                id: Date.now(),
+                memberId: activeUserId,
+                emoji: emoji,
+                moodText: moodText,
+                note: note,
+                time: 'Oggi',
+                likes: 0,
+                liked: false
+            };
+
+            moodPosts.unshift(newPostLocal);
+            renderPosts();
+
             try {
+                // Invia a Supabase
                 const { error } = await db.from('umori').insert([{
                     memberId: activeUserId,
                     emoji: emoji,
@@ -858,10 +883,17 @@
                 }]);
 
                 if (error) {
-                    alert("❌ Errore Supabase: " + error.message);
+                    console.warn("Retrying with snake_case fallback...", error);
+                    await db.from('umori').insert([{
+                        member_id: activeUserId,
+                        emoji: emoji,
+                        mood_text: moodText,
+                        note: note,
+                        likes: 0
+                    }]);
                 }
             } catch (err) {
-                alert("❌ Errore durante l'invio: " + err.message);
+                console.warn("Background sync post error:", err);
             }
 
             await loadCloudData();
@@ -893,6 +925,10 @@
         }
 
         function quickMood(emoji, label) {
+            if (!currentUser) {
+                openAuthModal();
+                return;
+            }
             selectModalEmoji(emoji, label);
             openMoodModal();
         }
