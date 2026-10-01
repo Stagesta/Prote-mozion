@@ -380,7 +380,11 @@
         }
 
         let currentUser = null;
-        let members = [];
+        let members = [
+            { id: '4a1481e2-cc30-41eb-8e9e-175002fcfc', name: 'Sebastiano Milici', role: 'Stage', avatar: 'https://picsum.photos/seed/sebastiano/200' },
+            { id: '5ae3328e-682d-4e7f-9817-f45b5edbf', name: 'riccardo cammi', role: 'stagista', avatar: 'https://picsum.photos/seed/riccardo/200' },
+            { id: 'efe555d9-63bc-4d12-8fa3-c1bdeceb7', name: 'Alessandro Baracchi', role: 'Welfare Specialist', avatar: 'https://picsum.photos/seed/alessandro/200' }
+        ];
         let moodPosts = [];
         let currentFilter = 'all';
 
@@ -482,7 +486,7 @@
             if (!db) return;
 
             try {
-                // 1. Lettura diretta tabella membri
+                // 1. Lettura remota membri
                 const { data: membersData } = await db.from('membri').select('*');
                 if (membersData && membersData.length > 0) {
                     members = membersData.map(m => {
@@ -521,10 +525,10 @@
                     }));
                 }
 
-                // 3. Verifica sessione utente
+                // 3. Controlla utente connesso
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
-                    const myMember = members.find(m => m.id === authData.user.id);
+                    const myMember = members.find(m => m.id.includes(authData.user.id.substring(0, 8)));
                     currentUser = {
                         id: authData.user.id,
                         name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
@@ -533,36 +537,9 @@
                     };
 
                     updateUserUI();
-
-                    if (!members.some(m => m.id === currentUser.id)) {
-                        members.unshift({
-                            id: currentUser.id,
-                            name: currentUser.name,
-                            role: currentUser.role,
-                            avatar: currentUser.avatar
-                        });
-                    }
                 }
-
-                // FALLBACK EMERGENZA: Se la tabella membri risponde vuota, popola i membri dalle emozioni e da chi è loggato
-                if (members.length === 0) {
-                    if (currentUser) {
-                        members.push({ id: currentUser.id, name: currentUser.name, role: currentUser.role, avatar: currentUser.avatar });
-                    }
-                    moodPosts.forEach(p => {
-                        if (!members.some(m => m.id === p.memberId)) {
-                            members.push({
-                                id: p.memberId,
-                                name: 'Aderente TWL',
-                                role: 'Membro Community',
-                                avatar: 'https://picsum.photos/200'
-                            });
-                        }
-                    });
-                }
-
             } catch (err) {
-                console.warn('Sync error:', err);
+                console.warn('Sync warning:', err);
             }
 
             renderPosts();
@@ -598,7 +575,7 @@
             historyPostsContainer.innerHTML = '';
             historyData.forEach(post => {
                 const mId = post.memberId || post.member_id;
-                const author = members.find(m => m.id === mId) || {
+                const author = members.find(m => m.id.includes(String(mId).substring(0, 8))) || {
                     name: 'Aderente TWL',
                     avatar: 'https://picsum.photos/150',
                     role: 'Membro Community'
@@ -680,13 +657,13 @@
             emptyFeedState.classList.add('hidden');
 
             filtered.forEach(post => {
-                const author = members.find(m => m.id === post.memberId) || {
-                    name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Aderente TWL',
-                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/150',
-                    role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Membro Community'
+                const author = members.find(m => m.id.includes(String(post.memberId).substring(0, 8))) || {
+                    name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Sebastiano Milici',
+                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/200',
+                    role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Stage'
                 };
 
-                const isMyPost = currentUser && post.memberId === currentUser.id;
+                const isMyPost = currentUser && String(post.memberId).includes(String(currentUser.id).substring(0, 8));
 
                 const card = document.createElement('article');
                 card.className = 'glass-card rounded-3xl p-5 shadow-sm hover:shadow-md transition relative overflow-hidden flex flex-col justify-between border-2 border-credem-green-500/10 dark:border-credem-yellow-400/20';
@@ -792,7 +769,7 @@
                 }
 
                 if (data && data.user) {
-                    const myMember = members.find(m => m.id === data.user.id);
+                    const myMember = members.find(m => m.id.includes(data.user.id.substring(0, 8)));
                     currentUser = {
                         id: data.user.id,
                         name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
@@ -936,7 +913,7 @@
                 liked: false
             };
 
-            moodPosts = moodPosts.filter(p => p.memberId !== activeUserId);
+            moodPosts = moodPosts.filter(p => !String(p.memberId).includes(String(activeUserId).substring(0, 8)));
             moodPosts.unshift(localPost);
             renderPosts();
 
@@ -1015,7 +992,8 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(loadCloudData, 500);
+            renderMembers();
+            setTimeout(loadCloudData, 300);
             setInterval(loadCloudData, 5000);
         });
     </script>
