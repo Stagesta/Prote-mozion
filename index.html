@@ -356,7 +356,7 @@
 
                 <div class="flex justify-end gap-3 pt-3 border-t border-credem-green-100 dark:border-credem-green-800">
                     <button type="button" onclick="closeMoodModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 dark:text-emerald-300 hover:bg-gray-100 transition">Annulla</button>
-                    <button type="button" onclick="executePostMood()" class="credem-btn-yellow px-5 py-2 rounded-xl text-sm font-black shadow-md transition">Sostituisci Emozione</button>
+                    <button type="button" id="submitMoodBtn" onclick="executePostMood()" class="credem-btn-yellow px-5 py-2 rounded-xl text-sm font-black shadow-md transition">Sostituisci Emozione</button>
                 </div>
             </div>
         </div>
@@ -375,7 +375,7 @@
                         auth: { persistSession: true }
                     });
                 } else {
-                    alert("⚠️ Attenzione: Impossibile caricare il client Supabase. Verifica la connessione.");
+                    alert("⚠️ Attenzione: Impossibile caricare il client Supabase.");
                 }
             }
             return clientSupabase;
@@ -703,7 +703,7 @@
             });
         }
 
-        // LOGIN CORRETTO CON CHIUSURA FORZATA DEL MODALE
+        // LOGIN CORRETTO
         async function executeLogin() {
             const db = getSupabase();
             if (!db) return alert("❌ Errore: Impossibile connettersi a Supabase.");
@@ -743,7 +743,6 @@
                     btn.disabled = false;
                     btn.innerText = "Accedi Ora";
 
-                    // SBLOCCO E CHIUSURA
                     closeAuthModal();
                     updateUserUI();
                     await loadCloudData();
@@ -826,7 +825,7 @@
             btn.innerText = "Crea Account TWL";
         }
 
-        // MODIFICA PROFILO DIRETTA
+        // MODIFICA PROFILO
         async function executeEditProfile() {
             const db = getSupabase();
             if (!currentUser || !db) return;
@@ -875,55 +874,58 @@
             loadCloudData();
         }
 
-        // PUBBLICAZIONE MOOD
+        // PUBBLICAZIONE MOOD CORRETTA E CON GESTIONE ERRORI VISIVA
         async function executePostMood() {
             const db = getSupabase();
-            if (!currentUser || !db) return alert('Devi prima accedere!');
+            if (!currentUser || !db) return alert('Devi prima accedere per inviare un\'emozione!');
 
             const emoji = document.getElementById('selectedEmojiInput').value;
             const moodText = document.getElementById('moodLabelInput').value.trim();
             const note = document.getElementById('moodNoteInput').value.trim();
 
-            if (!moodText) return alert("Scegli un'emozione.");
+            if (!moodText) return alert("Scegli un'emozione prima di salvare.");
 
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
+            const btn = document.getElementById('submitMoodBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "Salvataggio...";
+            }
 
             try {
-                await db
-                    .from('umori')
-                    .delete()
-                    .eq('memberId', currentUser.id)
-                    .gte('created_at', startOfToday.toISOString());
-
-                await db.from('umori').insert([{
+                // Inserimento diretto senza cancellazioni complesse preventive
+                const { error } = await db.from('umori').insert([{
                     memberId: currentUser.id,
                     emoji: emoji,
                     moodText: moodText,
                     note: note,
                     likes: 0
                 }]);
+
+                if (error) {
+                    alert("❌ Impossibile salvare l'emozione: " + error.message);
+                } else {
+                    closeMoodModal();
+                    await loadCloudData();
+                }
             } catch (e) {
-                console.error(e);
+                alert("❌ Errore imprevisto salvataggio: " + e.message);
             }
 
-            closeMoodModal();
-            await loadCloudData();
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = "Sostituisci Emozione";
+            }
         }
 
         async function deleteMyMood(postId) {
             if (!confirm('Vuoi rimuovere la tua emozione di oggi?')) return;
 
             const db = getSupabase();
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
-
-            if (db) {
+            if (db && currentUser) {
                 await db
                     .from('umori')
                     .delete()
-                    .eq('memberId', currentUser.id)
-                    .gte('created_at', startOfToday.toISOString());
+                    .eq('memberId', currentUser.id);
             }
 
             await loadCloudData();
