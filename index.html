@@ -473,20 +473,12 @@
             renderPosts();
         }
 
-        function getStartOfTodayLocalISO() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}T00:00:00`;
-        }
-
         async function loadCloudData() {
             const db = getSupabase();
             if (!db) return;
 
             try {
-                // 1. Lettura remota membri
+                // 1. Scarica e mappa la lista dei membri
                 const { data: membersData } = await db.from('membri').select('*');
                 if (membersData && membersData.length > 0) {
                     members = membersData.map(m => {
@@ -503,13 +495,13 @@
                     });
                 }
 
-                const startOfTodayISO = getStartOfTodayLocalISO();
+                // 2. Scarica gli ultimi post (persistenze per le 24 ore recenti per non far sparire i post al ricaricamento)
+                const past24hISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-                // 2. Lettura post odierni
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
-                    .gte('created_at', startOfTodayISO)
+                    .gte('created_at', past24hISO)
                     .order('id', { ascending: false });
 
                 if (postsData) {
@@ -525,7 +517,7 @@
                     }));
                 }
 
-                // 3. Controlla utente connesso
+                // 3. Controlla utente loggato
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = members.find(m => String(m.id).includes(String(authData.user.id).substring(0, 8)));
@@ -546,7 +538,7 @@
             renderMembers();
         }
 
-        // FUNZIONE STORICO CORRETTA ED ESPLICITA
+        // STORICO FUNZIONANTE SENZA BLOCCI IN CARICAMENTO
         async function fetchHistoryForDate(dateString) {
             const db = getSupabase();
             const historyPostsContainer = document.getElementById('historyPostsContainer');
@@ -555,17 +547,28 @@
             historyPostsContainer.innerHTML = '<div class="text-center py-8 text-xs text-emerald-600 font-bold animate-pulse">Caricamento storico...</div>';
 
             try {
-                const startDate = `${dateString}T00:00:00`;
-                const endDate = `${dateString}T23:59:59`;
-
+                // Recupera tutti i post e filtra per la data selezionata
                 const { data: historyData, error } = await db
                     .from('umori')
                     .select('*')
-                    .gte('created_at', startDate)
-                    .lte('created_at', endDate)
                     .order('id', { ascending: false });
 
-                if (error || !historyData || historyData.length === 0) {
+                if (error || !historyData) {
+                    historyPostsContainer.innerHTML = `
+                        <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
+                            Impossibile recuperare i dati per il giorno <b>${dateString}</b>.
+                        </div>
+                    `;
+                    return;
+                }
+
+                const filteredHistory = historyData.filter(post => {
+                    if (!post.created_at) return false;
+                    const postDate = String(post.created_at).split('T')[0];
+                    return postDate === dateString;
+                });
+
+                if (filteredHistory.length === 0) {
                     historyPostsContainer.innerHTML = `
                         <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
                             Nessuna emozione registrata per il giorno <b>${dateString}</b>.
@@ -575,7 +578,7 @@
                 }
 
                 historyPostsContainer.innerHTML = '';
-                historyData.forEach(post => {
+                filteredHistory.forEach(post => {
                     const mId = post.memberId || post.member_id;
                     const author = members.find(m => String(m.id).includes(String(mId).substring(0, 8))) || {
                         name: 'Aderente TWL',
@@ -604,7 +607,7 @@
             } catch (err) {
                 historyPostsContainer.innerHTML = `
                     <div class="text-center py-8 text-xs text-red-500">
-                        Errore di lettura dallo storico: ${err.message}
+                        Errore durante il caricamento dello storico.
                     </div>
                 `;
             }
@@ -927,13 +930,6 @@
             renderPosts();
 
             try {
-                const startOfTodayISO = getStartOfTodayLocalISO();
-
-                await db.from('umori')
-                    .delete()
-                    .eq('memberId', activeUserId)
-                    .gte('created_at', startOfTodayISO);
-
                 const { error } = await db.from('umori').insert([{
                     memberId: activeUserId,
                     emoji: emoji,
@@ -963,11 +959,7 @@
 
             const db = getSupabase();
             if (db && currentUser) {
-                const startOfTodayISO = getStartOfTodayLocalISO();
-                await db.from('umori')
-                    .delete()
-                    .eq('memberId', currentUser.id)
-                    .gte('created_at', startOfTodayISO);
+                await db.from('umori').delete().eq('memberId', currentUser.id);
             }
 
             await loadCloudData();
