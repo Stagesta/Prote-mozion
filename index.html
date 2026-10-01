@@ -101,11 +101,6 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <button onclick="openHistoryModal()" class="p-2.5 rounded-2xl bg-white/80 dark:bg-credem-green-800 hover:bg-gray-100 dark:hover:bg-credem-green-700 text-credem-green-800 dark:text-credem-yellow-400 border border-credem-green-200 dark:border-credem-green-700 transition flex items-center gap-1.5 text-xs font-bold" title="Storico Calendario">
-                    <i class="fa-solid fa-calendar-days text-sm"></i>
-                    <span class="hidden sm:inline">Storico</span>
-                </button>
-
                 <div id="userHeaderSection">
                     <button onclick="openAuthModal()" class="credem-btn-yellow font-extrabold px-4 py-2 rounded-2xl text-xs sm:text-sm shadow-md transition hover:scale-105 active:scale-95 flex items-center gap-2 border border-credem-yellow-300">
                         <i class="fa-solid fa-right-to-bracket text-credem-green-900"></i>
@@ -203,31 +198,6 @@
         </aside>
 
     </main>
-
-    <!-- Modal: Storico Emozioni (Calendario) -->
-    <div id="historyModal" class="fixed inset-0 z-50 flex items-center justify-center bg-credem-green-950/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 px-4">
-        <div class="glass-card bg-white dark:bg-credem-green-900 w-full max-w-2xl rounded-3xl p-6 shadow-2xl border-2 border-credem-yellow-400/40 transform scale-95 transition-transform duration-200 max-h-[85vh] flex flex-col" id="historyModalCard">
-            <div class="flex justify-between items-center pb-4 border-b border-credem-green-100 dark:border-credem-green-800">
-                <h3 class="font-bold font-display text-lg text-credem-green-800 dark:text-credem-yellow-400 flex items-center gap-2">
-                    <i class="fa-solid fa-calendar-days text-credem-yellow-500"></i> Storico Emozioni Passate
-                </h3>
-                <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-credem-green-700 dark:hover:text-credem-yellow-400 text-lg">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="py-4 border-b border-credem-green-100 dark:border-credem-green-800 flex items-center gap-3">
-                <label class="text-xs font-bold text-credem-green-700 dark:text-emerald-300">Seleziona Data:</label>
-                <input type="date" id="historyDatePicker" onchange="fetchHistoryForDate(this.value)" class="px-3 py-1.5 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-xs font-bold text-gray-800 dark:text-emerald-100 focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
-            </div>
-
-            <div id="historyPostsContainer" class="overflow-y-auto space-y-3 pt-4 flex-1 pr-1">
-                <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-400">
-                    Scegli una data dal calendario in alto per visualizzare le emozioni registrate in quel giorno.
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Modal: Auth (Login & Registrazione) -->
     <div id="authModal" class="fixed inset-0 z-50 flex items-center justify-center bg-credem-green-950/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 px-4">
@@ -386,7 +356,6 @@
             { id: 'efe555d9-63bc-4d12-8fa3-c1bdeceb7', name: 'Alessandro Baracchi', role: 'Welfare Specialist', avatar: 'https://picsum.photos/seed/alessandro/200' }
         ];
         let moodPosts = [];
-        let allRawPosts = [];
         let currentFilter = 'all';
 
         const postsContainer = document.getElementById('postsContainer');
@@ -403,8 +372,6 @@
         const moodModalCard = document.getElementById('moodModalCard');
         const editProfileModal = document.getElementById('editProfileModal');
         const editProfileModalCard = document.getElementById('editProfileModalCard');
-        const historyModal = document.getElementById('historyModal');
-        const historyModalCard = document.getElementById('historyModalCard');
 
         document.getElementById('themeToggleBtn').addEventListener('click', () => {
             document.documentElement.classList.toggle('dark');
@@ -440,26 +407,6 @@
             editProfileModalCard.classList.add('scale-95');
         }
 
-        function openHistoryModal() {
-            historyModal.classList.remove('opacity-0', 'pointer-events-none');
-            historyModalCard.classList.remove('scale-95');
-            
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const todayISO = `${year}-${month}-${day}`;
-            
-            const historyDatePicker = document.getElementById('historyDatePicker');
-            historyDatePicker.value = todayISO;
-            fetchHistoryForDate(todayISO);
-        }
-
-        function closeHistoryModal() {
-            historyModal.classList.add('opacity-0', 'pointer-events-none');
-            historyModalCard.classList.add('scale-95');
-        }
-
         function switchTab(tab) {
             if (tab === 'login') {
                 document.getElementById('loginForm').classList.remove('hidden');
@@ -477,14 +424,6 @@
         function setFilter(filter) {
             currentFilter = filter;
             renderPosts();
-        }
-
-        function getTodayString() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
         }
 
         function matchMember(memberId) {
@@ -518,31 +457,24 @@
                     });
                 }
 
-                // 2. Scarica tutti i post
+                // 2. Scarica le emozioni recenti
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
-                if (postsData) {
-                    allRawPosts = postsData;
-                    const todayStr = getTodayString();
-
-                    moodPosts = postsData
-                        .filter(p => {
-                            if (!p.created_at) return true;
-                            return String(p.created_at).startsWith(todayStr);
-                        })
-                        .map(p => ({
-                            id: p.id,
-                            memberId: p.memberId || p.member_id,
-                            emoji: p.emoji,
-                            moodText: p.moodText || p.mood_text,
-                            note: p.note,
-                            time: 'Oggi',
-                            likes: p.likes || 0,
-                            liked: false
-                        }));
+                if (postsData && postsData.length > 0) {
+                    // Prende gli ultimi post inseriti
+                    moodPosts = postsData.map(p => ({
+                        id: p.id,
+                        memberId: p.memberId || p.member_id,
+                        emoji: p.emoji,
+                        moodText: p.moodText || p.mood_text,
+                        note: p.note,
+                        time: 'Oggi',
+                        likes: p.likes || 0,
+                        liked: false
+                    }));
                 }
 
                 // 3. Controlla utente loggato
@@ -564,63 +496,6 @@
 
             renderPosts();
             renderMembers();
-        }
-
-        // STORICO FUNZIONANTE PER TUTTE LE DATE PASSATE
-        function fetchHistoryForDate(dateString) {
-            const historyPostsContainer = document.getElementById('historyPostsContainer');
-            if (!dateString) return;
-
-            if (!allRawPosts || allRawPosts.length === 0) {
-                historyPostsContainer.innerHTML = `
-                    <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
-                        Nessuna emozione registrata per il giorno <b>${dateString}</b>.
-                    </div>
-                `;
-                return;
-            }
-
-            const filteredHistory = allRawPosts.filter(post => {
-                if (!post.created_at) return false;
-                return String(post.created_at).startsWith(dateString);
-            });
-
-            if (filteredHistory.length === 0) {
-                historyPostsContainer.innerHTML = `
-                    <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
-                        Nessuna emozione registrata per il giorno <b>${dateString}</b>.
-                    </div>
-                `;
-                return;
-            }
-
-            historyPostsContainer.innerHTML = '';
-            filteredHistory.forEach(post => {
-                const mId = post.memberId || post.member_id;
-                const author = matchMember(mId) || {
-                    name: 'Aderente TWL',
-                    avatar: 'https://picsum.photos/150',
-                    role: 'Membro Community'
-                };
-
-                const card = document.createElement('div');
-                card.className = 'glass-card rounded-2xl p-4 border border-credem-green-200 dark:border-credem-green-800 flex items-center justify-between gap-3 mb-2';
-                card.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <img src="${author.avatar}" class="w-10 h-10 rounded-xl object-cover ring-2 ring-credem-yellow-400/60">
-                        <div>
-                            <h4 class="text-xs font-bold text-credem-green-900 dark:text-white">${author.name}</h4>
-                            <p class="text-[11px] text-credem-green-700/70 dark:text-emerald-300">${author.role}</p>
-                            ${post.note ? `<p class="text-xs italic text-gray-600 dark:text-emerald-200 mt-1">"${escapeHtml(post.note)}"</p>` : ''}
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
-                        <span class="text-xl">${post.emoji}</span>
-                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text || ''}</span>
-                    </div>
-                `;
-                historyPostsContainer.appendChild(card);
-            });
         }
 
         function updateUserUI() {
