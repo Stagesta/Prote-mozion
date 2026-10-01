@@ -386,6 +386,7 @@
             { id: 'efe555d9-63bc-4d12-8fa3-c1bdeceb7', name: 'Alessandro Baracchi', role: 'Welfare Specialist', avatar: 'https://picsum.photos/seed/alessandro/200' }
         ];
         let moodPosts = [];
+        let allRawPosts = [];
         let currentFilter = 'all';
 
         const postsContainer = document.getElementById('postsContainer');
@@ -509,13 +510,14 @@
                     });
                 }
 
-                // 2. Scarica i post odierni
+                // 2. Scarica tutti i post SENZA filtri SQL
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData) {
+                    allRawPosts = postsData;
                     moodPosts = postsData
                         .filter(p => isPostFromToday(p.created_at))
                         .map(p => ({
@@ -551,82 +553,66 @@
             renderMembers();
         }
 
-        // STORICO SICURO SENZA BLOCCI IN RETE
-        async function fetchHistoryForDate(dateString) {
-            const db = getSupabase();
+        // STORICO ULTRA-VELOCE E SICURO
+        function fetchHistoryForDate(dateString) {
             const historyPostsContainer = document.getElementById('historyPostsContainer');
-            if (!dateString || !db) return;
+            if (!dateString) return;
 
-            historyPostsContainer.innerHTML = '<div class="text-center py-8 text-xs text-emerald-600 font-bold animate-pulse">Caricamento storico...</div>';
-
-            try {
-                const { data: historyData, error } = await db
-                    .from('umori')
-                    .select('*')
-                    .order('id', { ascending: false });
-
-                if (error || !historyData) {
-                    historyPostsContainer.innerHTML = `
-                        <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
-                            Nessuna emozione registrata per il giorno <b>${dateString}</b>.
-                        </div>
-                    `;
-                    return;
-                }
-
-                const filteredHistory = historyData.filter(post => {
-                    if (!post.created_at) return false;
-                    const d = new Date(post.created_at);
-                    const year = d.getFullYear();
-                    const month = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    const postFormatted = `${year}-${month}-${day}`;
-                    return postFormatted === dateString;
-                });
-
-                if (filteredHistory.length === 0) {
-                    historyPostsContainer.innerHTML = `
-                        <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
-                            Nessuna emozione registrata per il giorno <b>${dateString}</b>.
-                        </div>
-                    `;
-                    return;
-                }
-
-                historyPostsContainer.innerHTML = '';
-                filteredHistory.forEach(post => {
-                    const mId = post.memberId || post.member_id;
-                    const author = members.find(m => String(m.id).includes(String(mId).substring(0, 8))) || {
-                        name: 'Aderente TWL',
-                        avatar: 'https://picsum.photos/150',
-                        role: 'Membro Community'
-                    };
-
-                    const card = document.createElement('div');
-                    card.className = 'glass-card rounded-2xl p-4 border border-credem-green-200 dark:border-credem-green-800 flex items-center justify-between gap-3 mb-2';
-                    card.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <img src="${author.avatar}" class="w-10 h-10 rounded-xl object-cover ring-2 ring-credem-yellow-400/60">
-                            <div>
-                                <h4 class="text-xs font-bold text-credem-green-900 dark:text-white">${author.name}</h4>
-                                <p class="text-[11px] text-credem-green-700/70 dark:text-emerald-300">${author.role}</p>
-                                ${post.note ? `<p class="text-xs italic text-gray-600 dark:text-emerald-200 mt-1">"${escapeHtml(post.note)}"</p>` : ''}
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
-                            <span class="text-xl">${post.emoji}</span>
-                            <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text || ''}</span>
-                        </div>
-                    `;
-                    historyPostsContainer.appendChild(card);
-                });
-            } catch (err) {
+            if (!allRawPosts || allRawPosts.length === 0) {
                 historyPostsContainer.innerHTML = `
                     <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
                         Nessuna emozione registrata per il giorno <b>${dateString}</b>.
                     </div>
                 `;
+                return;
             }
+
+            const filteredHistory = allRawPosts.filter(post => {
+                if (!post.created_at) return false;
+                const d = new Date(post.created_at);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const postFormatted = `${year}-${month}-${day}`;
+                return postFormatted === dateString;
+            });
+
+            if (filteredHistory.length === 0) {
+                historyPostsContainer.innerHTML = `
+                    <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
+                        Nessuna emozione registrata per il giorno <b>${dateString}</b>.
+                    </div>
+                `;
+                return;
+            }
+
+            historyPostsContainer.innerHTML = '';
+            filteredHistory.forEach(post => {
+                const mId = post.memberId || post.member_id;
+                const author = members.find(m => String(m.id).includes(String(mId).substring(0, 8))) || {
+                    name: 'Aderente TWL',
+                    avatar: 'https://picsum.photos/150',
+                    role: 'Membro Community'
+                };
+
+                const card = document.createElement('div');
+                card.className = 'glass-card rounded-2xl p-4 border border-credem-green-200 dark:border-credem-green-800 flex items-center justify-between gap-3 mb-2';
+                card.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${author.avatar}" class="w-10 h-10 rounded-xl object-cover ring-2 ring-credem-yellow-400/60">
+                        <div>
+                            <h4 class="text-xs font-bold text-credem-green-900 dark:text-white">${author.name}</h4>
+                            <p class="text-[11px] text-credem-green-700/70 dark:text-emerald-300">${author.role}</p>
+                            ${post.note ? `<p class="text-xs italic text-gray-600 dark:text-emerald-200 mt-1">"${escapeHtml(post.note)}"</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
+                        <span class="text-xl">${post.emoji}</span>
+                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text || ''}</span>
+                    </div>
+                `;
+                historyPostsContainer.appendChild(card);
+            });
         }
 
         function updateUserUI() {
