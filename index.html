@@ -482,7 +482,7 @@
             if (!db) return;
 
             try {
-                // 1. Carica la lista dei membri in modo sicuro
+                // 1. Lettura diretta tabella membri
                 const { data: membersData } = await db.from('membri').select('*');
                 if (membersData && membersData.length > 0) {
                     members = membersData.map(m => {
@@ -501,7 +501,7 @@
 
                 const startOfTodayISO = getStartOfTodayLocalISO();
 
-                // 2. Carica i post odierni
+                // 2. Lettura post odierni
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
@@ -521,7 +521,7 @@
                     }));
                 }
 
-                // 3. Verifica l'utente autenticato
+                // 3. Verifica sessione utente
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = members.find(m => m.id === authData.user.id);
@@ -543,6 +543,24 @@
                         });
                     }
                 }
+
+                // FALLBACK EMERGENZA: Se la tabella membri risponde vuota, popola i membri dalle emozioni e da chi è loggato
+                if (members.length === 0) {
+                    if (currentUser) {
+                        members.push({ id: currentUser.id, name: currentUser.name, role: currentUser.role, avatar: currentUser.avatar });
+                    }
+                    moodPosts.forEach(p => {
+                        if (!members.some(m => m.id === p.memberId)) {
+                            members.push({
+                                id: p.memberId,
+                                name: 'Aderente TWL',
+                                role: 'Membro Community',
+                                avatar: 'https://picsum.photos/200'
+                            });
+                        }
+                    });
+                }
+
             } catch (err) {
                 console.warn('Sync error:', err);
             }
