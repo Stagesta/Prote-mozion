@@ -487,6 +487,15 @@
             return `${year}-${month}-${day}`;
         }
 
+        function matchMember(memberId) {
+            if (!memberId) return null;
+            const target = String(memberId).trim().toLowerCase();
+            return members.find(m => {
+                const src = String(m.id).trim().toLowerCase();
+                return src === target || src.includes(target) || target.includes(src);
+            });
+        }
+
         async function loadCloudData() {
             const db = getSupabase();
             if (!db) return;
@@ -539,7 +548,7 @@
                 // 3. Controlla utente loggato
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
-                    const myMember = members.find(m => String(m.id).includes(String(authData.user.id).substring(0, 8)));
+                    const myMember = matchMember(authData.user.id);
                     currentUser = {
                         id: authData.user.id,
                         name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
@@ -557,6 +566,7 @@
             renderMembers();
         }
 
+        // STORICO FUNZIONANTE PER TUTTE LE DATE PASSATE
         function fetchHistoryForDate(dateString) {
             const historyPostsContainer = document.getElementById('historyPostsContainer');
             if (!dateString) return;
@@ -587,7 +597,7 @@
             historyPostsContainer.innerHTML = '';
             filteredHistory.forEach(post => {
                 const mId = post.memberId || post.member_id;
-                const author = members.find(m => String(m.id).includes(String(mId).substring(0, 8))) || {
+                const author = matchMember(mId) || {
                     name: 'Aderente TWL',
                     avatar: 'https://picsum.photos/150',
                     role: 'Membro Community'
@@ -669,13 +679,13 @@
             emptyFeedState.classList.add('hidden');
 
             filtered.forEach(post => {
-                const author = members.find(m => String(m.id).includes(String(post.memberId).substring(0, 8))) || {
+                const author = matchMember(post.memberId) || {
                     name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Sebastiano Milici',
                     avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/200',
                     role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Stage'
                 };
 
-                const isMyPost = currentUser && String(post.memberId).includes(String(currentUser.id).substring(0, 8));
+                const isMyPost = currentUser && matchMember(post.memberId)?.id === currentUser.id;
 
                 const card = document.createElement('article');
                 card.className = 'glass-card rounded-3xl p-5 shadow-sm hover:shadow-md transition relative overflow-hidden flex flex-col justify-between border-2 border-credem-green-500/10 dark:border-credem-yellow-400/20';
@@ -781,7 +791,7 @@
                 }
 
                 if (data && data.user) {
-                    const myMember = members.find(m => String(m.id).includes(data.user.id.substring(0, 8)));
+                    const myMember = matchMember(data.user.id);
                     currentUser = {
                         id: data.user.id,
                         name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
@@ -925,7 +935,7 @@
                 liked: false
             };
 
-            moodPosts = moodPosts.filter(p => !String(p.memberId).includes(String(activeUserId).substring(0, 8)));
+            moodPosts = moodPosts.filter(p => !matchMember(p.memberId) || matchMember(p.memberId).id !== matchMember(activeUserId)?.id);
             moodPosts.unshift(localPost);
             renderPosts();
 
