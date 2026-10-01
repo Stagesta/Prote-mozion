@@ -482,15 +482,22 @@
             if (!db) return;
 
             try {
-                // 1. Carica i membri con supporto per chiavi in italiano o inglese
+                // 1. Carica i membri leggendo avatar o la stringa troncata in modo sicuro
                 const { data: membersData } = await db.from('membri').select('*');
                 if (membersData && membersData.length > 0) {
-                    members = membersData.map(m => ({
-                        id: m.id,
-                        name: m.name || m.nome || 'Membro Community',
-                        role: m.role || m.ruolo || 'Aderente',
-                        avatar: m.avatar || m.foto || 'https://picsum.photos/200'
-                    }));
+                    members = membersData.map(m => {
+                        let av = m.avatar || m.foto;
+                        // Se l'avatar è una stringa data Base64 gigante corrotta, usa una foto fallback pulita
+                        if (!av || (typeof av === 'string' && av.length > 500)) {
+                            av = `https://picsum.photos/seed/${m.id}/200`;
+                        }
+                        return {
+                            id: m.id,
+                            name: m.name || m.nome || 'Membro Community',
+                            role: m.role || m.ruolo || 'Aderente',
+                            avatar: av
+                        };
+                    });
                 }
 
                 const startOfTodayISO = getStartOfTodayLocalISO();
@@ -515,7 +522,7 @@
                     }));
                 }
 
-                // 3. Verifica la sessione utente
+                // 3. Verifica sessione utente
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = members.find(m => m.id === authData.user.id);
@@ -528,7 +535,6 @@
 
                     updateUserUI();
 
-                    // Garantisce che l'utente attuale sia visibile nella lista dei membri a destra
                     if (!members.some(m => m.id === currentUser.id)) {
                         members.unshift({
                             id: currentUser.id,
