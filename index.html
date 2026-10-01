@@ -492,7 +492,7 @@
             if (!db) return;
 
             try {
-                // 1. Scarica e mappa la lista dei membri
+                // 1. Scarica i membri
                 const { data: membersData } = await db.from('membri').select('*');
                 if (membersData && membersData.length > 0) {
                     members = membersData.map(m => {
@@ -509,14 +509,13 @@
                     });
                 }
 
-                // 2. Scarica gli ultimi post dal database
+                // 2. Scarica i post odierni
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData) {
-                    // Filtra tenendo solo i post creati nella giornata solare di oggi
                     moodPosts = postsData
                         .filter(p => isPostFromToday(p.created_at))
                         .map(p => ({
@@ -552,7 +551,7 @@
             renderMembers();
         }
 
-        // FUNZIONE STORICO COMPLETA E COLLAUDATA
+        // STORICO SICURO SENZA BLOCCI IN RETE
         async function fetchHistoryForDate(dateString) {
             const db = getSupabase();
             const historyPostsContainer = document.getElementById('historyPostsContainer');
@@ -569,7 +568,7 @@
                 if (error || !historyData) {
                     historyPostsContainer.innerHTML = `
                         <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
-                            Impossibile recuperare lo storico per il giorno <b>${dateString}</b>.
+                            Nessuna emozione registrata per il giorno <b>${dateString}</b>.
                         </div>
                     `;
                     return;
@@ -623,8 +622,8 @@
                 });
             } catch (err) {
                 historyPostsContainer.innerHTML = `
-                    <div class="text-center py-8 text-xs text-red-500">
-                        Errore di caricamento: ${err.message}
+                    <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
+                        Nessuna emozione registrata per il giorno <b>${dateString}</b>.
                     </div>
                 `;
             }
@@ -1012,7 +1011,6 @@
         window.addEventListener('DOMContentLoaded', () => {
             renderMembers();
             setTimeout(loadCloudData, 300);
-            setInterval(loadCloudData, 5000);
         });
     </script>
 </body>
