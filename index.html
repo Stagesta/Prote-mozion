@@ -479,13 +479,12 @@
             renderPosts();
         }
 
-        function isPostFromToday(createdAtString) {
-            if (!createdAtString) return true;
-            const postDate = new Date(createdAtString);
+        function getTodayString() {
             const now = new Date();
-            return postDate.getDate() === now.getDate() &&
-                   postDate.getMonth() === now.getMonth() &&
-                   postDate.getFullYear() === now.getFullYear();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
 
         async function loadCloudData() {
@@ -510,7 +509,7 @@
                     });
                 }
 
-                // 2. Scarica tutti i post SENZA filtri SQL
+                // 2. Scarica tutti i post
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
@@ -518,8 +517,13 @@
 
                 if (postsData) {
                     allRawPosts = postsData;
+                    const todayStr = getTodayString();
+
                     moodPosts = postsData
-                        .filter(p => isPostFromToday(p.created_at))
+                        .filter(p => {
+                            if (!p.created_at) return true;
+                            return String(p.created_at).startsWith(todayStr);
+                        })
                         .map(p => ({
                             id: p.id,
                             memberId: p.memberId || p.member_id,
@@ -553,7 +557,6 @@
             renderMembers();
         }
 
-        // STORICO ULTRA-VELOCE E SICURO
         function fetchHistoryForDate(dateString) {
             const historyPostsContainer = document.getElementById('historyPostsContainer');
             if (!dateString) return;
@@ -569,12 +572,7 @@
 
             const filteredHistory = allRawPosts.filter(post => {
                 if (!post.created_at) return false;
-                const d = new Date(post.created_at);
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                const postFormatted = `${year}-${month}-${day}`;
-                return postFormatted === dateString;
+                return String(post.created_at).startsWith(dateString);
             });
 
             if (filteredHistory.length === 0) {
