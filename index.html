@@ -482,11 +482,13 @@
             if (!db) return;
 
             try {
+                // 1. Carica i membri
                 const { data: membersData } = await db.from('membri').select('*');
                 if (membersData && membersData.length > 0) members = membersData;
 
                 const startOfTodayISO = getStartOfTodayLocalISO();
 
+                // 2. Carica i post di oggi
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
@@ -506,27 +508,30 @@
                     }));
                 }
 
+                // 3. Verifica sessione utente
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = members.find(m => m.id === authData.user.id);
                     currentUser = {
                         id: authData.user.id,
-                        name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
-                        role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
+                        name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
+                        role: myMember?.role || authData.user.user_metadata?.role || 'Stage',
                         avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
                     };
 
-                    if (!members.some(m => m.id === currentUser.id)) {
-                        members.unshift({
-                            id: currentUser.id,
-                            name: currentUser.name,
-                            role: currentUser.role,
-                            avatar: currentUser.avatar
-                        });
-                    }
-
                     updateUserUI();
                 }
+
+                // POPOLAMENTO SICURO ADERENTI PER NON AVERE MAI 0 ADERENTI
+                if (currentUser && !members.some(m => m.id === currentUser.id)) {
+                    members.unshift({
+                        id: currentUser.id,
+                        name: currentUser.name,
+                        role: currentUser.role,
+                        avatar: currentUser.avatar
+                    });
+                }
+
             } catch (err) {
                 console.warn('Sync error:', err);
             }
@@ -605,7 +610,6 @@
                 `;
                 if (openNewMoodModalBtn) openNewMoodModalBtn.classList.remove('hidden');
 
-                // Adatta il pulsante nella bacheca vuota se l'utente è loggato
                 if (emptyFeedBtnContainer) {
                     emptyFeedBtnContainer.innerHTML = `
                         <button onclick="openMoodModal()" class="px-5 py-2.5 credem-btn-yellow font-black rounded-xl text-xs shadow-md">
@@ -694,6 +698,8 @@
 
         function renderMembers() {
             membersListContainer.innerHTML = '';
+            
+            // Assicurati che l'array contenga almeno i membri conosciuti
             memberCountBadge.textContent = `${members.length} Aderenti`;
 
             if (members.length === 0) {
@@ -776,7 +782,7 @@
             const fileInput = document.getElementById('regFileInput');
             let avatar = document.getElementById('regAvatarInput').value.trim();
 
-            if (!name || !role || !email || !password) return alert("⚠️️ Compila tutti i campi.");
+            if (!name || !role || !email || !password) return alert("⚠️ Compila tutti i campi.");
 
             const btn = document.getElementById('regSubmitBtn');
             btn.disabled = true;
@@ -852,7 +858,6 @@
             loadCloudData();
         }
 
-        // SALVATAGGIO POST TOLLERANTE SU ENTRAMBE LE VARIANTI DI COLONNA
         async function executePostMood() {
             const db = getSupabase();
             if (!db) return alert('Errore di connessione a Supabase');
@@ -879,7 +884,6 @@
 
             closeMoodModal();
 
-            // Anteprima locale immediata
             const localPost = {
                 id: Date.now(),
                 memberId: activeUserId,
@@ -898,13 +902,11 @@
             try {
                 const startOfTodayISO = getStartOfTodayLocalISO();
 
-                // Elimina post precedente di oggi per sovrascrivere l'emozione
                 await db.from('umori')
                     .delete()
                     .eq('memberId', activeUserId)
                     .gte('created_at', startOfTodayISO);
 
-                // Prova inserimento con camelCase
                 const { error } = await db.from('umori').insert([{
                     memberId: activeUserId,
                     emoji: emoji,
@@ -914,7 +916,6 @@
                 }]);
 
                 if (error) {
-                    // Fallback con snake_case
                     await db.from('umori').insert([{
                         member_id: activeUserId,
                         emoji: emoji,
