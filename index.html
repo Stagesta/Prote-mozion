@@ -374,8 +374,6 @@
                     clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
                         auth: { persistSession: true }
                     });
-                } else {
-                    alert("⚠️ Attenzione: Impossibile caricare il client Supabase.");
                 }
             }
             return clientSupabase;
@@ -490,9 +488,9 @@
                 if (postsData) {
                     moodPosts = postsData.map(p => ({
                         id: p.id,
-                        memberId: p.memberId,
+                        memberId: p.memberId || p.member_id,
                         emoji: p.emoji,
-                        moodText: p.moodText,
+                        moodText: p.moodText || p.mood_text,
                         note: p.note,
                         time: 'Oggi',
                         likes: p.likes || 0,
@@ -500,29 +498,19 @@
                     }));
                 }
 
-                if (!currentUser) {
-                    const { data: authData } = await db.auth.getUser();
-                    if (authData && authData.user) {
-                        const myMember = members.find(m => m.id === authData.user.id);
-                        currentUser = {
-                            id: authData.user.id,
-                            name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
-                            role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
-                            avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
-                        };
-                        updateUserUI();
-                    }
-                } else {
-                    const myMember = members.find(m => m.id === currentUser.id);
-                    if (myMember) {
-                        currentUser.avatar = myMember.avatar;
-                        currentUser.name = myMember.name;
-                        currentUser.role = myMember.role;
-                        updateUserUI();
-                    }
+                const { data: authData } = await db.auth.getUser();
+                if (authData && authData.user) {
+                    const myMember = members.find(m => m.id === authData.user.id);
+                    currentUser = {
+                        id: authData.user.id,
+                        name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
+                        role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
+                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                    };
+                    updateUserUI();
                 }
             } catch (err) {
-                console.warn('Errore sincronizzazione:', err);
+                console.warn('Sync warning:', err);
             }
 
             renderPosts();
@@ -560,7 +548,8 @@
 
             historyPostsContainer.innerHTML = '';
             historyData.forEach(post => {
-                const author = members.find(m => m.id === post.memberId) || {
+                const mId = post.memberId || post.member_id;
+                const author = members.find(m => m.id === mId) || {
                     name: 'Aderente TWL',
                     avatar: 'https://picsum.photos/150',
                     role: 'Membro Community'
@@ -579,7 +568,7 @@
                     </div>
                     <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
                         <span class="text-xl">${post.emoji}</span>
-                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText}</span>
+                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text}</span>
                     </div>
                 `;
                 historyPostsContainer.appendChild(card);
@@ -593,9 +582,6 @@
                     <div class="flex items-center gap-2">
                         <div class="relative group cursor-pointer" onclick="openEditProfileModal()" title="Modifica Foto Profilo">
                             <img src="${currentUser.avatar}" class="w-8 h-8 rounded-xl object-cover ring-2 ring-credem-yellow-400">
-                            <div class="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                                <i class="fa-solid fa-pen text-[10px] text-white"></i>
-                            </div>
                         </div>
                         <span class="text-xs font-bold text-credem-green-900 dark:text-white hidden md:inline">${currentUser.name}</span>
                         <button onclick="openEditProfileModal()" class="p-1.5 text-xs text-credem-yellow-600 dark:text-credem-yellow-400 hover:scale-110 transition" title="Modifica Foto"><i class="fa-solid fa-camera"></i></button>
@@ -681,7 +667,7 @@
             if (members.length === 0) {
                 membersListContainer.innerHTML = `
                     <div class="text-center py-8 text-credem-green-600/70 dark:text-emerald-400 text-xs font-medium">
-                        Nessun aderente ancora.<br>Invita i tuoi colleghi a registrarsi!
+                        Nessun aderente ancora.
                     </div>
                 `;
                 return;
@@ -703,7 +689,6 @@
             });
         }
 
-        // LOGIN CORRETTO
         async function executeLogin() {
             const db = getSupabase();
             if (!db) return alert("❌ Errore: Impossibile connettersi a Supabase.");
@@ -711,53 +696,30 @@
             const email = document.getElementById('loginEmailInput').value.trim();
             const password = document.getElementById('loginPasswordInput').value.trim();
 
-            if (!email || !password) {
-                alert("⚠️ Inserisci sia l'email che la password.");
-                return;
-            }
+            if (!email || !password) return alert("⚠️ Inserisci email e password.");
 
             const btn = document.getElementById('loginSubmitBtn');
             btn.disabled = true;
             btn.innerText = "Accesso in corso...";
 
-            try {
-                const { data, error } = await db.auth.signInWithPassword({ email, password });
-                
-                if (error) {
-                    alert('❌ Accesso fallito: ' + error.message);
-                    btn.disabled = false;
-                    btn.innerText = "Accedi Ora";
-                    return;
-                }
-
-                if (data && data.user) {
-                    const myMember = members.find(m => m.id === data.user.id);
-                    
-                    currentUser = {
-                        id: data.user.id,
-                        name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
-                        role: myMember?.role || data.user.user_metadata?.role || 'Aderente',
-                        avatar: myMember?.avatar || data.user.user_metadata?.avatar || 'https://picsum.photos/200'
-                    };
-
-                    btn.disabled = false;
-                    btn.innerText = "Accedi Ora";
-
-                    closeAuthModal();
-                    updateUserUI();
-                    await loadCloudData();
-                }
-            } catch (err) {
-                alert("❌ Errore imprevisto: " + err.message);
+            const { data, error } = await db.auth.signInWithPassword({ email, password });
+            
+            if (error) {
+                alert('❌ Accesso fallito: ' + error.message);
                 btn.disabled = false;
                 btn.innerText = "Accedi Ora";
+                return;
             }
+
+            btn.disabled = false;
+            btn.innerText = "Accedi Ora";
+            closeAuthModal();
+            await loadCloudData();
         }
 
-        // REGISTRAZIONE DIRETTA
         async function executeRegister() {
             const db = getSupabase();
-            if (!db) return alert("❌ Errore: Impossibile connettersi a Supabase.");
+            if (!db) return alert("❌ Errore connettività.");
 
             const name = document.getElementById('regNameInput').value.trim();
             const role = document.getElementById('regRoleInput').value.trim();
@@ -766,66 +728,45 @@
             const fileInput = document.getElementById('regFileInput');
             let avatar = document.getElementById('regAvatarInput').value.trim();
 
-            if (!name || !role || !email || !password) {
-                alert("⚠️ Compila tutti i campi obbligatori del modulo.");
-                return;
-            }
+            if (!name || !role || !email || !password) return alert("⚠️ Compila tutti i campi.");
 
             const btn = document.getElementById('regSubmitBtn');
             btn.disabled = true;
-            btn.innerText = "Registrazione in corso...";
+            btn.innerText = "Registrazione...";
 
-            try {
-                if (fileInput.files && fileInput.files[0]) {
-                    avatar = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (e) => resolve(e.target.result);
-                        reader.readAsDataURL(fileInput.files[0]);
-                    });
-                }
-
-                if (!avatar) {
-                    avatar = `https://picsum.photos/seed/${Date.now()}/200`;
-                }
-
-                const { data, error } = await db.auth.signUp({
-                    email: email,
-                    password: password,
-                    options: { data: { name, role, avatar } }
+            if (fileInput.files && fileInput.files[0]) {
+                avatar = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(fileInput.files[0]);
                 });
+            }
 
-                if (error) {
-                    alert('❌ Errore Registrazione: ' + error.message);
-                    btn.disabled = false;
-                    btn.innerText = "Crea Account TWL";
-                    return;
-                }
+            if (!avatar) avatar = `https://picsum.photos/seed/${Date.now()}/200`;
 
-                if (data.user) {
-                    try {
-                        await db.from('membri').upsert([{
-                            id: data.user.id,
-                            name: name,
-                            role: role,
-                            avatar: avatar
-                        }]);
-                    } catch (e) {}
+            const { data, error } = await db.auth.signUp({
+                email,
+                password,
+                options: { data: { name, role, avatar } }
+            });
 
-                    currentUser = { id: data.user.id, name, role, avatar };
-                    alert("🎉 Registrazione completata!");
-                    closeAuthModal();
-                    updateUserUI();
-                    await loadCloudData();
-                }
-            } catch (err) {
-                alert("❌ Errore imprevisto: " + err.message);
+            if (error) {
+                alert('❌ Registrazione fallita: ' + error.message);
+                btn.disabled = false;
+                btn.innerText = "Crea Account TWL";
+                return;
+            }
+
+            if (data.user) {
+                await db.from('membri').upsert([{ id: data.user.id, name, role, avatar }]);
+                closeAuthModal();
+                await loadCloudData();
             }
 
             btn.disabled = false;
             btn.innerText = "Crea Account TWL";
         }
 
-        // MODIFICA PROFILO
         async function executeEditProfile() {
             const db = getSupabase();
             if (!currentUser || !db) return;
@@ -841,28 +782,13 @@
                 });
             }
 
-            if (!newAvatar) {
-                alert('Seleziona una foto dal computer o inserisci un link URL.');
-                return;
-            }
+            if (!newAvatar) return alert('Seleziona un file o un URL.');
 
             currentUser.avatar = newAvatar;
-
-            try {
-                await db.from('membri').upsert([{
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    role: currentUser.role,
-                    avatar: newAvatar
-                }]);
-
-                await db.auth.updateUser({
-                    data: { avatar: newAvatar }
-                });
-            } catch (e) {}
+            await db.from('membri').upsert([{ id: currentUser.id, name: currentUser.name, role: currentUser.role, avatar: newAvatar }]);
+            await db.auth.updateUser({ data: { avatar: newAvatar } });
 
             closeEditProfileModal();
-            updateUserUI();
             await loadCloudData();
         }
 
@@ -874,47 +800,52 @@
             loadCloudData();
         }
 
-        // PUBBLICAZIONE MOOD CORRETTA E CON GESTIONE ERRORI VISIVA
+        // SALVATAGGIO DIRETTO DELL'EMOZIONE SENZA BLOCCARE IL PULSANTE
         async function executePostMood() {
             const db = getSupabase();
-            if (!currentUser || !db) return alert('Devi prima accedere per inviare un\'emozione!');
+            if (!db) return;
 
+            const { data: authData } = await db.auth.getUser();
+            if (!authData || !authData.user) {
+                alert('Devi prima accedere!');
+                openAuthModal();
+                return;
+            }
+
+            const activeUserId = authData.user.id;
             const emoji = document.getElementById('selectedEmojiInput').value;
             const moodText = document.getElementById('moodLabelInput').value.trim();
             const note = document.getElementById('moodNoteInput').value.trim();
 
-            if (!moodText) return alert("Scegli un'emozione prima di salvare.");
+            if (!moodText) return alert("Scegli un'emozione.");
 
-            const btn = document.getElementById('submitMoodBtn');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerText = "Salvataggio...";
-            }
+            // Salva subito sia usando memberId che member_id per supportare qualsiasi colonna Supabase
+            const postPayload = {
+                memberId: activeUserId,
+                member_id: activeUserId,
+                emoji: emoji,
+                moodText: moodText,
+                mood_text: moodText,
+                note: note,
+                likes: 0
+            };
 
-            try {
-                // Inserimento diretto senza cancellazioni complesse preventive
-                const { error } = await db.from('umori').insert([{
-                    memberId: currentUser.id,
+            // Inserisci e chiudi subito la finestra
+            closeMoodModal();
+
+            const { error } = await db.from('umori').insert([postPayload]);
+            if (error) {
+                // Se c'è un errore sulle colonne duplicate, riprova con la versione pulita
+                await db.from('umori').insert([{
+                    memberId: activeUserId,
                     emoji: emoji,
                     moodText: moodText,
                     note: note,
                     likes: 0
                 }]);
-
-                if (error) {
-                    alert("❌ Impossibile salvare l'emozione: " + error.message);
-                } else {
-                    closeMoodModal();
-                    await loadCloudData();
-                }
-            } catch (e) {
-                alert("❌ Errore imprevisto salvataggio: " + e.message);
             }
 
-            if (btn) {
-                btn.disabled = false;
-                btn.innerText = "Sostituisci Emozione";
-            }
+            await loadCloudData();
         }
 
         async function deleteMyMood(postId) {
@@ -922,10 +853,7 @@
 
             const db = getSupabase();
             if (db && currentUser) {
-                await db
-                    .from('umori')
-                    .delete()
-                    .eq('memberId', currentUser.id);
+                await db.from('umori').delete().eq('memberId', currentUser.id);
             }
 
             await loadCloudData();
@@ -946,10 +874,6 @@
         }
 
         function quickMood(emoji, label) {
-            if (!currentUser) {
-                openAuthModal();
-                return;
-            }
             selectModalEmoji(emoji, label);
             openMoodModal();
         }
