@@ -528,7 +528,7 @@
                 // 3. Controlla utente connesso
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
-                    const myMember = members.find(m => m.id.includes(authData.user.id.substring(0, 8)));
+                    const myMember = members.find(m => String(m.id).includes(String(authData.user.id).substring(0, 8)));
                     currentUser = {
                         id: authData.user.id,
                         name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
@@ -546,59 +546,68 @@
             renderMembers();
         }
 
+        // FUNZIONE STORICO CORRETTA ED ESPLICITA
         async function fetchHistoryForDate(dateString) {
             const db = getSupabase();
             const historyPostsContainer = document.getElementById('historyPostsContainer');
             if (!dateString || !db) return;
 
-            historyPostsContainer.innerHTML = '<div class="text-center py-8 text-xs text-emerald-600 animate-pulse">Caricamento storico...</div>';
+            historyPostsContainer.innerHTML = '<div class="text-center py-8 text-xs text-emerald-600 font-bold animate-pulse">Caricamento storico...</div>';
 
-            const startDate = `${dateString}T00:00:00`;
-            const endDate = `${dateString}T23:59:59`;
+            try {
+                const startDate = `${dateString}T00:00:00`;
+                const endDate = `${dateString}T23:59:59`;
 
-            const { data: historyData } = await db
-                .from('umori')
-                .select('*')
-                .gte('created_at', startDate)
-                .lte('created_at', endDate)
-                .order('id', { ascending: false });
+                const { data: historyData, error } = await db
+                    .from('umori')
+                    .select('*')
+                    .gte('created_at', startDate)
+                    .lte('created_at', endDate)
+                    .order('id', { ascending: false });
 
-            if (!historyData || historyData.length === 0) {
-                historyPostsContainer.innerHTML = `
-                    <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
-                        Nessuna emozione registrata per il giorno <b>${dateString}</b>.
-                    </div>
-                `;
-                return;
-            }
-
-            historyPostsContainer.innerHTML = '';
-            historyData.forEach(post => {
-                const mId = post.memberId || post.member_id;
-                const author = members.find(m => m.id.includes(String(mId).substring(0, 8))) || {
-                    name: 'Aderente TWL',
-                    avatar: 'https://picsum.photos/150',
-                    role: 'Membro Community'
-                };
-
-                const card = document.createElement('div');
-                card.className = 'glass-card rounded-2xl p-4 border border-credem-green-200 dark:border-credem-green-800 flex items-center justify-between gap-3';
-                card.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <img src="${author.avatar}" class="w-10 h-10 rounded-xl object-cover ring-2 ring-credem-yellow-400/60">
-                        <div>
-                            <h4 class="text-xs font-bold text-credem-green-900 dark:text-white">${author.name}</h4>
-                            <p class="text-[11px] text-credem-green-700/70 dark:text-emerald-300">${author.role}</p>
-                            ${post.note ? `<p class="text-xs italic text-gray-600 dark:text-emerald-200 mt-1">"${escapeHtml(post.note)}"</p>` : ''}
+                if (error || !historyData || historyData.length === 0) {
+                    historyPostsContainer.innerHTML = `
+                        <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
+                            Nessuna emozione registrata per il giorno <b>${dateString}</b>.
                         </div>
-                    </div>
-                    <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
-                        <span class="text-xl">${post.emoji}</span>
-                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text}</span>
+                    `;
+                    return;
+                }
+
+                historyPostsContainer.innerHTML = '';
+                historyData.forEach(post => {
+                    const mId = post.memberId || post.member_id;
+                    const author = members.find(m => String(m.id).includes(String(mId).substring(0, 8))) || {
+                        name: 'Aderente TWL',
+                        avatar: 'https://picsum.photos/150',
+                        role: 'Membro Community'
+                    };
+
+                    const card = document.createElement('div');
+                    card.className = 'glass-card rounded-2xl p-4 border border-credem-green-200 dark:border-credem-green-800 flex items-center justify-between gap-3 mb-2';
+                    card.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <img src="${author.avatar}" class="w-10 h-10 rounded-xl object-cover ring-2 ring-credem-yellow-400/60">
+                            <div>
+                                <h4 class="text-xs font-bold text-credem-green-900 dark:text-white">${author.name}</h4>
+                                <p class="text-[11px] text-credem-green-700/70 dark:text-emerald-300">${author.role}</p>
+                                ${post.note ? `<p class="text-xs italic text-gray-600 dark:text-emerald-200 mt-1">"${escapeHtml(post.note)}"</p>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
+                            <span class="text-xl">${post.emoji}</span>
+                            <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text || ''}</span>
+                        </div>
+                    `;
+                    historyPostsContainer.appendChild(card);
+                });
+            } catch (err) {
+                historyPostsContainer.innerHTML = `
+                    <div class="text-center py-8 text-xs text-red-500">
+                        Errore di lettura dallo storico: ${err.message}
                     </div>
                 `;
-                historyPostsContainer.appendChild(card);
-            });
+            }
         }
 
         function updateUserUI() {
@@ -657,7 +666,7 @@
             emptyFeedState.classList.add('hidden');
 
             filtered.forEach(post => {
-                const author = members.find(m => m.id.includes(String(post.memberId).substring(0, 8))) || {
+                const author = members.find(m => String(m.id).includes(String(post.memberId).substring(0, 8))) || {
                     name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Sebastiano Milici',
                     avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/200',
                     role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Stage'
@@ -769,7 +778,7 @@
                 }
 
                 if (data && data.user) {
-                    const myMember = members.find(m => m.id.includes(data.user.id.substring(0, 8)));
+                    const myMember = members.find(m => String(m.id).includes(data.user.id.substring(0, 8)));
                     currentUser = {
                         id: data.user.id,
                         name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
