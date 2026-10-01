@@ -486,9 +486,9 @@
                 if (postsData) {
                     moodPosts = postsData.map(p => ({
                         id: p.id,
-                        memberId: p.memberId,
+                        memberId: p.memberId || p.member_id,
                         emoji: p.emoji,
-                        moodText: p.moodText,
+                        moodText: p.moodText || p.mood_text,
                         note: p.note,
                         time: 'Oggi',
                         likes: p.likes || 0,
@@ -556,7 +556,8 @@
 
             historyPostsContainer.innerHTML = '';
             historyData.forEach(post => {
-                const author = members.find(m => m.id === post.memberId) || {
+                const mId = post.memberId || post.member_id;
+                const author = members.find(m => m.id === mId) || {
                     name: 'Aderente TWL',
                     avatar: 'https://picsum.photos/150',
                     role: 'Membro Community'
@@ -575,7 +576,7 @@
                     </div>
                     <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
                         <span class="text-xl">${post.emoji}</span>
-                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText}</span>
+                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text}</span>
                     </div>
                 `;
                 historyPostsContainer.appendChild(card);
@@ -619,7 +620,7 @@
             }
 
             postsContainer.classList.remove('hidden');
-            emptyFeedState.add('hidden');
+            emptyFeedState.classList.add('hidden');
 
             filtered.forEach(post => {
                 const author = members.find(m => m.id === post.memberId) || {
@@ -827,6 +828,7 @@
             loadCloudData();
         }
 
+        // SALVATAGGIO POST CON NOTIFICA D'ERRORE E CHIUSURA MODALE
         async function executePostMood() {
             const db = getSupabase();
             if (!db) return alert('Errore di connessione a Supabase');
@@ -840,10 +842,12 @@
 
             const btn = document.getElementById('submitMoodBtn');
             btn.disabled = true;
-            btn.innerText = "Salvataggio...";
+
+            // Chiusura immediata del modale per non far congelare lo schermo
+            closeMoodModal();
 
             try {
-                // Inserimento pulito colonna standard memberId
+                // Tentativo di inserimento usando la colonna standard memberId
                 const { error } = await db.from('umori').insert([{
                     memberId: currentUser.id,
                     emoji: emoji,
@@ -853,17 +857,26 @@
                 }]);
 
                 if (error) {
-                    alert("❌ Errore durante il salvataggio: " + error.message);
-                } else {
-                    closeMoodModal();
-                    await loadCloudData();
+                    // Se fallisce, prova con la sintassi alternativa delle colonne snake_case
+                    const { error: err2 } = await db.from('umori').insert([{
+                        member_id: currentUser.id,
+                        emoji: emoji,
+                        mood_text: moodText,
+                        note: note,
+                        likes: 0
+                    }]);
+
+                    if (err2) {
+                        alert("❌ Errore Supabase nell'inserimento: " + (error.message || err2.message));
+                    }
                 }
             } catch (err) {
-                alert("❌ Errore imprevisto: " + err.message);
+                alert("❌ Errore di rete/JavaScript: " + err.message);
             }
 
             btn.disabled = false;
             btn.innerText = "Sostituisci Emozione";
+            await loadCloudData();
         }
 
         async function deleteMyMood(postId) {
