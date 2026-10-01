@@ -482,9 +482,16 @@
             if (!db) return;
 
             try {
-                // 1. Carica i membri
+                // 1. Carica i membri con supporto per chiavi in italiano o inglese
                 const { data: membersData } = await db.from('membri').select('*');
-                if (membersData && membersData.length > 0) members = membersData;
+                if (membersData && membersData.length > 0) {
+                    members = membersData.map(m => ({
+                        id: m.id,
+                        name: m.name || m.nome || 'Membro Community',
+                        role: m.role || m.ruolo || 'Aderente',
+                        avatar: m.avatar || m.foto || 'https://picsum.photos/200'
+                    }));
+                }
 
                 const startOfTodayISO = getStartOfTodayLocalISO();
 
@@ -508,7 +515,7 @@
                     }));
                 }
 
-                // 3. Verifica sessione utente
+                // 3. Verifica la sessione utente
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = members.find(m => m.id === authData.user.id);
@@ -520,18 +527,17 @@
                     };
 
                     updateUserUI();
-                }
 
-                // POPOLAMENTO SICURO ADERENTI PER NON AVERE MAI 0 ADERENTI
-                if (currentUser && !members.some(m => m.id === currentUser.id)) {
-                    members.unshift({
-                        id: currentUser.id,
-                        name: currentUser.name,
-                        role: currentUser.role,
-                        avatar: currentUser.avatar
-                    });
+                    // Garantisce che l'utente attuale sia visibile nella lista dei membri a destra
+                    if (!members.some(m => m.id === currentUser.id)) {
+                        members.unshift({
+                            id: currentUser.id,
+                            name: currentUser.name,
+                            role: currentUser.role,
+                            avatar: currentUser.avatar
+                        });
+                    }
                 }
-
             } catch (err) {
                 console.warn('Sync error:', err);
             }
@@ -698,8 +704,6 @@
 
         function renderMembers() {
             membersListContainer.innerHTML = '';
-            
-            // Assicurati che l'array contenga almeno i membri conosciuti
             memberCountBadge.textContent = `${members.length} Aderenti`;
 
             if (members.length === 0) {
