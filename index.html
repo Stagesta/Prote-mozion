@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TWL - Condividi le tue Emozioni</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome per Icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- SDK Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        credem: {
+                            green: {
+                                50: '#f0fdf4',
+                                100: '#dcfce7',
+                                200: '#bbf7d0',
+                                500: '#15803d',
+                                600: '#166534',
+                                700: '#14532d',
+                                800: '#0f3d21',
+                                900: '#0a2916',
+                            },
+                            yellow: {
+                                100: '#fef9c3',
+                                300: '#fde047',
+                                400: '#facc15',
+                                500: '#eab308',
+                                600: '#ca8a04',
+                            }
+                        }
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+                            '50%': { transform: 'translateY(-6px) rotate(4deg)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { opacity: '0.8', transform: 'scale(1)' },
+                            '50%': { opacity: '1', transform: 'scale(1.04)' },
+                        }
+                    },
+                    animation: {
+                        float: 'float 3s ease-in-out infinite',
+                        pulseGlow: 'pulseGlow 2.5s ease-in-out infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(22, 101, 52, 0.3); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(22, 101, 52, 0.6); }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        .dark .glass-panel {
+            background: rgba(10, 41, 22, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(34, 197, 94, 0.15);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(22, 101, 52, 0.12);
+        }
+        .dark .glass-card {
+            background: rgba(15, 61, 33, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(250, 204, 21, 0.15);
+        }
+
+        .credem-gradient-bg {
+            background: linear-gradient(135deg, #0a2916 0%, #166534 50%, #14532d 100%);
+        }
+
+        .credem-btn-yellow {
+            background: linear-gradient(135deg, #facc15 0%, #eab308 100%);
+            color: #0a2916;
+        }
+        .credem-btn-yellow:hover {
+            background: linear-gradient(135deg, #fde047 0%, #facc15 100%);
+            box-shadow: 0 10px 20px -5px rgba(250, 204, 21, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-emerald-50 via-green-50/60 to-yellow-50/50 dark:from-credem-green-900 dark:via-gray-950 dark:to-credem-green-900 text-gray-800 dark:text-emerald-50 min-h-screen font-sans transition-colors duration-300 flex flex-col antialiased">
+
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-credem-green-500/20 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between py-3">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl credem-gradient-bg border-2 border-credem-yellow-400 flex items-center justify-center text-credem-yellow-400 font-black text-2xl shadow-lg shadow-credem-green-700/20 animate-pulseGlow">
+                    🌱
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black font-display tracking-tight text-credem-green-700 dark:text-credem-yellow-400 flex items-center gap-1">
+                        TWL
+                    </h1>
+                    <p class="text-[11px] font-bold text-credem-green-600/80 dark:text-emerald-300 tracking-wider uppercase hidden sm:block">Il network positivo della tua community</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button onclick="openHistoryModal()" class="p-2.5 rounded-2xl bg-white/80 dark:bg-credem-green-800 hover:bg-gray-100 dark:hover:bg-credem-green-700 text-credem-green-800 dark:text-credem-yellow-400 border border-credem-green-200 dark:border-credem-green-700 transition flex items-center gap-1.5 text-xs font-bold" title="Storico Calendario">
+                    <i class="fa-solid fa-calendar-days text-sm"></i>
+                    <span class="hidden sm:inline">Storico</span>
+                </button>
+
+                <div id="userHeaderSection">
+                    <button onclick="openAuthModal()" class="credem-btn-yellow font-extrabold px-4 py-2 rounded-2xl text-xs sm:text-sm shadow-md transition hover:scale-105 active:scale-95 flex items-center gap-2 border border-credem-yellow-300">
+                        <i class="fa-solid fa-right-to-bracket text-credem-green-900"></i>
+                        <span>Accedi / Registrati</span>
+                    </button>
+                </div>
+
+                <button id="openNewMoodModalBtn" onclick="openMoodModal()" class="hidden credem-btn-yellow font-extrabold px-4 py-2 rounded-2xl text-xs sm:text-sm shadow-md transition hover:scale-105 active:scale-95 flex items-center gap-2 border border-credem-yellow-300">
+                    <i class="fa-solid fa-plus text-credem-green-900"></i>
+                    <span class="hidden sm:inline">Aggiorna Emozione</span>
+                </button>
+
+                <button id="themeToggleBtn" class="p-2.5 rounded-2xl bg-white/80 dark:bg-credem-green-800 hover:bg-gray-100 dark:hover:bg-credem-green-700 text-credem-green-800 dark:text-credem-yellow-400 border border-credem-green-200 dark:border-credem-green-700 transition" title="Cambia Tema">
+                    <i class="fa-solid fa-moon dark:hidden text-lg"></i>
+                    <i class="fa-solid fa-sun hidden dark:block text-lg text-credem-yellow-400"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row gap-6">
+
+        <section class="flex-1 order-2 md:order-1 flex flex-col gap-6">
+            <div class="glass-panel p-6 rounded-3xl shadow-sm relative overflow-hidden credem-gradient-bg text-white border-2 border-credem-yellow-400/30">
+                <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-credem-yellow-400/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <span class="inline-block px-3 py-1 bg-credem-yellow-400/20 border border-credem-yellow-400/40 text-credem-yellow-300 font-extrabold text-[10px] tracking-wider uppercase rounded-full mb-2">
+                            Oggi
+                        </span>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold font-display text-white">Che emozione ti guida oggi?</h2>
+                        <p class="text-xs sm:text-sm text-emerald-100/90 mt-1">Sia positive che negative: condividi come ti senti davvero con il team.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5 bg-white/10 backdrop-blur-md p-2 rounded-2xl border border-white/20">
+                        <button onclick="quickMood('🌟', 'Ispirato')" class="p-1.5 text-xl hover:scale-125 transition" title="Ispirato">🌟</button>
+                        <button onclick="quickMood('⚡', 'Energico')" class="p-1.5 text-xl hover:scale-125 transition" title="Energico">⚡</button>
+                        <button onclick="quickMood('☕', 'Sereno')" class="p-1.5 text-xl hover:scale-125 transition" title="Sereno">☕</button>
+                        <button onclick="quickMood('😡', 'Arrabbiato')" class="p-1.5 text-xl hover:scale-125 transition" title="Arrabbiato">😡</button>
+                        <button onclick="quickMood('😢', 'Triste')" class="p-1.5 text-xl hover:scale-125 transition" title="Triste">😢</button>
+                        <button onclick="quickMood('😴', 'Stanco')" class="p-1.5 text-xl hover:scale-125 transition" title="Stanco">😴</button>
+                        <button onclick="quickMood('😬', 'Nervoso')" class="p-1.5 text-xl hover:scale-125 transition" title="Nervoso">😬</button>
+                        <button onclick="quickMood('🤫', 'Non mi parlare')" class="p-1.5 text-xl hover:scale-125 transition" title="Non mi parlare">🤫</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <div class="flex items-center gap-2" id="moodFilterContainer">
+                    <button data-filter="all" onclick="setFilter('all')" class="mood-filter-btn active px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold bg-credem-green-600 text-credem-yellow-300 border border-credem-yellow-400/40 shadow-md transition">
+                        Tutti gli Umori <span id="totalPostsBadge" class="ml-1 opacity-80 text-xs">(0)</span>
+                    </button>
+                    <button onclick="setFilter('🌟')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">🌟 Ispirato</button>
+                    <button onclick="setFilter('⚡')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">⚡ Energico</button>
+                    <button onclick="setFilter('☕')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">☕ Sereno</button>
+                    <button onclick="setFilter('😡')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">😡 Arrabbiato</button>
+                    <button onclick="setFilter('😢')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">😢 Triste</button>
+                    <button onclick="setFilter('😴')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">😴 Stanco</button>
+                    <button onclick="setFilter('😬')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">😬 Nervoso</button>
+                    <button onclick="setFilter('🤫')" class="mood-filter-btn px-3 py-2 rounded-2xl text-xs sm:text-sm font-semibold bg-white dark:bg-credem-green-800 text-credem-green-800 dark:text-emerald-100 hover:bg-emerald-50 dark:hover:bg-credem-green-700 transition flex items-center gap-1.5 border border-credem-green-200 dark:border-credem-green-700">🤫 Non mi parlare</button>
+                </div>
+            </div>
+
+            <div id="postsContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-5"></div>
+
+            <div id="emptyFeedState" class="glass-panel p-12 rounded-3xl text-center flex flex-col items-center justify-center border-2 border-dashed border-credem-green-200 dark:border-credem-green-800">
+                <div class="text-5xl mb-3">🌱</div>
+                <h3 class="text-lg font-bold text-credem-green-800 dark:text-credem-yellow-400">Nessuna emozione inserita oggi</h3>
+                <p class="text-sm text-gray-500 dark:text-emerald-300 mt-1">Sii il primo ad accedere e condividere la tua emozione di oggi nella rete TWL!</p>
+                <button onclick="openAuthModal()" class="mt-4 px-5 py-2.5 credem-btn-yellow font-black rounded-xl text-xs shadow-md">
+                    Accedi o Registrati Ora
+                </button>
+            </div>
+        </section>
+
+        <aside class="w-full md:w-80 lg:w-96 order-1 md:order-2 flex-shrink-0">
+            <div class="glass-panel rounded-3xl p-5 shadow-sm sticky top-22 flex flex-col gap-4 max-h-[calc(100vh-6.5rem)] border-2 border-credem-green-500/10">
+                <div class="flex items-center justify-between pb-3 border-b border-credem-green-100 dark:border-credem-green-800">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full bg-credem-yellow-400 ring-4 ring-credem-yellow-400/20 animate-pulse"></div>
+                        <h2 class="font-bold font-display text-credem-green-800 dark:text-white text-base">Rete TWL</h2>
+                    </div>
+                    <span id="memberCountBadge" class="bg-credem-green-100 dark:bg-credem-green-800 text-credem-green-800 dark:text-credem-yellow-300 text-xs font-black px-2.5 py-1 rounded-full border border-credem-green-300 dark:border-credem-green-700">
+                        0 Aderenti
+                    </span>
+                </div>
+
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-credem-green-600/60 dark:text-emerald-400 text-xs"></i>
+                    <input type="text" id="memberSearchInput" placeholder="Cerca tra i membri..." class="w-full pl-9 pr-4 py-2 bg-white/80 dark:bg-credem-green-800/60 border border-credem-green-200 dark:border-credem-green-700 focus:border-credem-yellow-500 rounded-xl text-xs text-gray-800 dark:text-emerald-100 outline-none transition">
+                </div>
+
+                <div id="membersListContainer" class="overflow-y-auto space-y-2 pr-1 flex-1 min-h-[200px] max-h-[480px]"></div>
+            </div>
+        </aside>
+
+    </main>
+
+    <!-- Modal: Storico Emozioni (Calendario) -->
+    <div id="historyModal" class="fixed inset-0 z-50 flex items-center justify-center bg-credem-green-950/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 px-4">
+        <div class="glass-card bg-white dark:bg-credem-green-900 w-full max-w-2xl rounded-3xl p-6 shadow-2xl border-2 border-credem-yellow-400/40 transform scale-95 transition-transform duration-200 max-h-[85vh] flex flex-col" id="historyModalCard">
+            <div class="flex justify-between items-center pb-4 border-b border-credem-green-100 dark:border-credem-green-800">
+                <h3 class="font-bold font-display text-lg text-credem-green-800 dark:text-credem-yellow-400 flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-days text-credem-yellow-500"></i> Storico Emozioni Passate
+                </h3>
+                <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-credem-green-700 dark:hover:text-credem-yellow-400 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="py-4 border-b border-credem-green-100 dark:border-credem-green-800 flex items-center gap-3">
+                <label class="text-xs font-bold text-credem-green-700 dark:text-emerald-300">Seleziona Data:</label>
+                <input type="date" id="historyDatePicker" onchange="fetchHistoryForDate(this.value)" class="px-3 py-1.5 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-xs font-bold text-gray-800 dark:text-emerald-100 focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+            </div>
+
+            <div id="historyPostsContainer" class="overflow-y-auto space-y-3 pt-4 flex-1 pr-1">
+                <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-400">
+                    Scegli una data dal calendario in alto per visualizzare le emozioni registrate in quel giorno.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Auth (Login & Registrazione) -->
+    <div id="authModal" class="fixed inset-0 z-50 flex items-center justify-center bg-credem-green-950/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 px-4">
+        <div class="glass-card bg-white dark:bg-credem-green-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border-2 border-credem-yellow-400/40 transform scale-95 transition-transform duration-200" id="authModalCard">
+            <div class="flex justify-between items-center pb-4 border-b border-credem-green-100 dark:border-credem-green-800">
+                <h3 class="font-bold font-display text-lg text-credem-green-800 dark:text-credem-yellow-400 flex items-center gap-2">
+                    <i class="fa-solid fa-user-circle text-credem-yellow-500"></i> <span id="authModalTitle">Accedi a TWL</span>
+                </h3>
+                <button onclick="closeAuthModal()" class="text-gray-400 hover:text-credem-green-700 dark:hover:text-credem-yellow-400 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="flex rounded-xl bg-gray-100 dark:bg-credem-green-800 p-1 mt-4">
+                <button id="showLoginTabBtn" onclick="switchTab('login')" class="flex-1 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-credem-green-700 shadow text-credem-green-900 dark:text-credem-yellow-300">Accedi</button>
+                <button id="showRegisterTabBtn" onclick="switchTab('register')" class="flex-1 py-1.5 text-xs font-bold rounded-lg text-gray-500 dark:text-emerald-300">Registrati</button>
+            </div>
+
+            <form id="loginForm" class="mt-4 space-y-3">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Email</label>
+                    <input type="email" id="loginEmailInput" required class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Password</label>
+                    <input type="password" id="loginPasswordInput" required class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <button type="submit" class="w-full credem-btn-yellow py-2.5 rounded-xl text-sm font-black shadow-md transition mt-2">Accedi Ora</button>
+            </form>
+
+            <form id="registerForm" class="mt-4 space-y-3 hidden">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Nome e Cognome</label>
+                    <input type="text" id="regNameInput" required placeholder="Es. Marco Rossi" class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Ruolo / Descrizione</label>
+                    <input type="text" id="regRoleInput" required placeholder="Es. Team Leader" class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Carica Foto Profilo dal Computer</label>
+                    <input type="file" id="regFileInput" accept="image/*" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-credem-yellow-300 file:text-credem-green-900 hover:file:bg-credem-yellow-400 cursor-pointer">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Oppure Inserisci URL Foto</label>
+                    <input type="url" id="regAvatarInput" placeholder="https://..." class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Email</label>
+                    <input type="email" id="regEmailInput" required class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Password</label>
+                    <input type="password" id="regPasswordInput" minlength="6" required class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <button type="submit" class="w-full credem-btn-yellow py-2.5 rounded-xl text-sm font-black shadow-md transition mt-2">Crea Account TWL</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Modifica Foto Profilo -->
+    <div id="editProfileModal" class="fixed inset-0 z-50 flex items-center justify-center bg-credem-green-950/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 px-4">
+        <div class="glass-card bg-white dark:bg-credem-green-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border-2 border-credem-yellow-400/40 transform scale-95 transition-transform duration-200" id="editProfileModalCard">
+            <div class="flex justify-between items-center pb-4 border-b border-credem-green-100 dark:border-credem-green-800">
+                <h3 class="font-bold font-display text-lg text-credem-green-800 dark:text-credem-yellow-400 flex items-center gap-2">
+                    <i class="fa-solid fa-camera text-credem-yellow-500"></i> Modifica Foto Profilo
+                </h3>
+                <button onclick="closeEditProfileModal()" class="text-gray-400 hover:text-credem-green-700 dark:hover:text-credem-yellow-400 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="editProfileForm" class="mt-4 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Scegli nuova immagine dal computer</label>
+                    <input type="file" id="editFileInput" accept="image/*" class="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-credem-yellow-300 file:text-credem-green-900 hover:file:bg-credem-yellow-400 cursor-pointer">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-credem-green-700 dark:text-emerald-300 mb-1">Oppure nuovo URL foto</label>
+                    <input type="url" id="editAvatarInput" placeholder="https://..." class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeEditProfileModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 dark:text-emerald-300 hover:bg-gray-100 transition">Annulla</button>
+                    <button type="submit" class="credem-btn-yellow px-5 py-2 rounded-xl text-sm font-black shadow-md transition">Aggiorna Foto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Nuovo Post / Aggiornamento Umore -->
+    <div id="moodModal" class="fixed inset-0 z-50 flex items-center justify-center bg-credem-green-950/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 px-4">
+        <div class="glass-card bg-white dark:bg-credem-green-900 w-full max-w-lg rounded-3xl p-6 shadow-2xl border-2 border-credem-yellow-400/40 transform scale-95 transition-transform duration-200" id="moodModalCard">
+            <div class="flex justify-between items-center pb-4 border-b border-credem-green-100 dark:border-credem-green-800">
+                <h3 class="font-bold font-display text-lg text-credem-green-800 dark:text-credem-yellow-400 flex items-center gap-2">
+                    <span>✨</span> Aggiorna la tua Emozione
+                </h3>
+                <button onclick="closeMoodModal()" class="text-gray-400 hover:text-credem-green-700 dark:hover:text-credem-yellow-400 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="moodForm" class="mt-4 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-credem-green-700 dark:text-emerald-300 mb-1.5">Scegli la tua Emozione</label>
+                    <div class="grid grid-cols-4 sm:grid-cols-8 gap-1.5 mb-3">
+                        <button type="button" onclick="selectModalEmoji('🌟', 'Ispirato')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">🌟</button>
+                        <button type="button" onclick="selectModalEmoji('⚡', 'Energico')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">⚡</button>
+                        <button type="button" onclick="selectModalEmoji('☕', 'Sereno')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">☕</button>
+                        <button type="button" onclick="selectModalEmoji('😡', 'Arrabbiato')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">😡</button>
+                        <button type="button" onclick="selectModalEmoji('😢', 'Triste')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">😢</button>
+                        <button type="button" onclick="selectModalEmoji('😴', 'Stanco')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">😴</button>
+                        <button type="button" onclick="selectModalEmoji('😬', 'Nervoso')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">😬</button>
+                        <button type="button" onclick="selectModalEmoji('🤫', 'Non mi parlare')" class="p-2 text-2xl border border-credem-green-200 dark:border-credem-green-700 rounded-xl hover:bg-credem-green-50 dark:hover:bg-credem-green-700 text-center transition">🤫</button>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <input type="text" id="selectedEmojiInput" readonly value="🌟" class="w-12 text-center text-xl bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl py-2 font-bold">
+                        <input type="text" id="moodLabelInput" placeholder="Es. Carico per i traguardi di oggi" required class="flex-1 px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-credem-yellow-400">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-credem-green-700 dark:text-emerald-300 mb-1.5">Pensiero / Messaggio per la rete</label>
+                    <textarea id="moodNoteInput" rows="3" placeholder="Scrivi qualcosa per condividere la tua emozione..." class="w-full px-3.5 py-2 bg-gray-50 dark:bg-credem-green-800 border border-credem-green-200 dark:border-credem-green-700 rounded-xl text-sm text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-credem-yellow-400 resize-none"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t border-credem-green-100 dark:border-credem-green-800">
+                    <button type="button" onclick="closeMoodModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 dark:text-emerald-300 hover:bg-gray-100 transition">Annulla</button>
+                    <button type="submit" class="credem-btn-yellow px-5 py-2 rounded-xl text-sm font-black shadow-md transition">Sostituisci Emozione</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://ersmtkwotehaflboealn.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyc210a3dvdGVoYWZsYm9lYWxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NjkxMTEsImV4cCI6MjEwNjI0NTExMX0.gdfJb0L3aS4r6Ke6b1jjjr0YmluvxK4sak4LiVRPVR0';
+        
+        let supabaseClient = null;
+        if (typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+
+        let currentUser = null;
+        let members = [];
+        let moodPosts = [];
+        let currentFilter = 'all';
+
+        const postsContainer = document.getElementById('postsContainer');
+        const emptyFeedState = document.getElementById('emptyFeedState');
+        const membersListContainer = document.getElementById('membersListContainer');
+        const memberCountBadge = document.getElementById('memberCountBadge');
+        const totalPostsBadge = document.getElementById('totalPostsBadge');
+        const userHeaderSection = document.getElementById('userHeaderSection');
+
+        const authModal = document.getElementById('authModal');
+        const authModalCard = document.getElementById('authModalCard');
+        const moodModal = document.getElementById('moodModal');
+        const moodModalCard = document.getElementById('moodModalCard');
+        const editProfileModal = document.getElementById('editProfileModal');
+        const editProfileModalCard = document.getElementById('editProfileModalCard');
+        const historyModal = document.getElementById('historyModal');
+        const historyModalCard = document.getElementById('historyModalCard');
+
+        document.getElementById('themeToggleBtn').addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+        });
+
+        function openAuthModal() {
+            authModal.classList.remove('opacity-0', 'pointer-events-none');
+            authModalCard.classList.remove('scale-95');
+        }
+
+        function closeAuthModal() {
+            authModal.classList.add('opacity-0', 'pointer-events-none');
+            authModalCard.classList.add('scale-95');
+        }
+
+        function openMoodModal() {
+            moodModal.classList.remove('opacity-0', 'pointer-events-none');
+            moodModalCard.classList.remove('scale-95');
+        }
+
+        function closeMoodModal() {
+            moodModal.classList.add('opacity-0', 'pointer-events-none');
+            moodModalCard.classList.add('scale-95');
+        }
+
+        function openEditProfileModal() {
+            editProfileModal.classList.remove('opacity-0', 'pointer-events-none');
+            editProfileModalCard.classList.remove('scale-95');
+        }
+
+        function closeEditProfileModal() {
+            editProfileModal.classList.add('opacity-0', 'pointer-events-none');
+            editProfileModalCard.classList.add('scale-95');
+        }
+
+        function openHistoryModal() {
+            historyModal.classList.remove('opacity-0', 'pointer-events-none');
+            historyModalCard.classList.remove('scale-95');
+            
+            const todayISO = new Date().toISOString().split('T')[0];
+            const historyDatePicker = document.getElementById('historyDatePicker');
+            historyDatePicker.value = todayISO;
+            fetchHistoryForDate(todayISO);
+        }
+
+        function closeHistoryModal() {
+            historyModal.classList.add('opacity-0', 'pointer-events-none');
+            historyModalCard.classList.add('scale-95');
+        }
+
+        function switchTab(tab) {
+            if (tab === 'login') {
+                document.getElementById('loginForm').classList.remove('hidden');
+                document.getElementById('registerForm').classList.add('hidden');
+                document.getElementById('showLoginTabBtn').className = "flex-1 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-credem-green-700 shadow text-credem-green-900 dark:text-credem-yellow-300";
+                document.getElementById('showRegisterTabBtn').className = "flex-1 py-1.5 text-xs font-bold rounded-lg text-gray-500 dark:text-emerald-300";
+            } else {
+                document.getElementById('registerForm').classList.remove('hidden');
+                document.getElementById('loginForm').classList.add('hidden');
+                document.getElementById('showRegisterTabBtn').className = "flex-1 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-credem-green-700 shadow text-credem-green-900 dark:text-credem-yellow-300";
+                document.getElementById('showLoginTabBtn').className = "flex-1 py-1.5 text-xs font-bold rounded-lg text-gray-500 dark:text-emerald-300";
+            }
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            renderPosts();
+        }
+
+        // SILENT RESET A MEZZANOTTE (Mostra solo post da inizio giornata)
+        async function loadCloudData() {
+            if (!supabaseClient) return;
+
+            try {
+                const { data: membersData } = await supabaseClient.from('membri').select('*');
+                if (membersData) members = membersData;
+
+                // Calcola l'inizio della giornata (00:00:00)
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
+
+                const { data: postsData } = await supabaseClient
+                    .from('umori')
+                    .select('*')
+                    .gte('created_at', startOfToday.toISOString())
+                    .order('id', { ascending: false });
+
+                if (postsData) {
+                    moodPosts = postsData.map(p => ({
+                        id: p.id,
+                        memberId: p.memberId,
+                        emoji: p.emoji,
+                        moodText: p.moodText,
+                        note: p.note,
+                        time: 'Oggi',
+                        likes: p.likes || 0,
+                        liked: false
+                    }));
+                }
+
+                if (!currentUser) {
+                    const { data: authData } = await supabaseClient.auth.getUser();
+                    if (authData && authData.user) {
+                        const myMember = members.find(m => m.id === authData.user.id);
+                        currentUser = {
+                            id: authData.user.id,
+                            name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
+                            role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
+                            avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                        };
+                        updateUserUI();
+                    }
+                } else {
+                    const myMember = members.find(m => m.id === currentUser.id);
+                    if (myMember) {
+                        currentUser.avatar = myMember.avatar;
+                        currentUser.name = myMember.name;
+                        currentUser.role = myMember.role;
+                        updateUserUI();
+                    }
+                }
+            } catch (err) {
+                console.warn('Errore auto-sync:', err);
+            }
+
+            renderPosts();
+            renderMembers();
+        }
+
+        // CARICA STORICO PASSATO PER DATA
+        async function fetchHistoryForDate(dateString) {
+            const historyPostsContainer = document.getElementById('historyPostsContainer');
+            if (!dateString || !supabaseClient) return;
+
+            historyPostsContainer.innerHTML = '<div class="text-center py-8 text-xs text-emerald-600 animate-pulse">Caricamento storico...</div>';
+
+            const startDate = new Date(dateString);
+            startDate.setHours(0, 0, 0, 0);
+            
+            const endDate = new Date(dateString);
+            endDate.setHours(23, 59, 59, 999);
+
+            const { data: historyData } = await supabaseClient
+                .from('umori')
+                .select('*')
+                .gte('created_at', startDate.toISOString())
+                .lte('created_at', endDate.toISOString())
+                .order('id', { ascending: false });
+
+            if (!historyData || historyData.length === 0) {
+                historyPostsContainer.innerHTML = `
+                    <div class="text-center py-8 text-xs text-gray-500 dark:text-emerald-300">
+                        Nessuna emozione registrata per il giorno <b>${dateString}</b>.
+                    </div>
+                `;
+                return;
+            }
+
+            historyPostsContainer.innerHTML = '';
+            historyData.forEach(post => {
+                const author = members.find(m => m.id === post.memberId) || {
+                    name: 'Aderente TWL',
+                    avatar: 'https://picsum.photos/150',
+                    role: 'Membro Community'
+                };
+
+                const card = document.createElement('div');
+                card.className = 'glass-card rounded-2xl p-4 border border-credem-green-200 dark:border-credem-green-800 flex items-center justify-between gap-3';
+                card.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${author.avatar}" class="w-10 h-10 rounded-xl object-cover ring-2 ring-credem-yellow-400/60">
+                        <div>
+                            <h4 class="text-xs font-bold text-credem-green-900 dark:text-white">${author.name}</h4>
+                            <p class="text-[11px] text-credem-green-700/70 dark:text-emerald-300">${author.role}</p>
+                            ${post.note ? `<p class="text-xs italic text-gray-600 dark:text-emerald-200 mt-1">"${escapeHtml(post.note)}"</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
+                        <span class="text-xl">${post.emoji}</span>
+                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText}</span>
+                    </div>
+                `;
+                historyPostsContainer.appendChild(card);
+            });
+        }
+
+        function updateUserUI() {
+            const openNewMoodModalBtn = document.getElementById('openNewMoodModalBtn');
+            if (currentUser) {
+                userHeaderSection.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="relative group cursor-pointer" onclick="openEditProfileModal()" title="Modifica Foto Profilo">
+                            <img src="${currentUser.avatar}" class="w-8 h-8 rounded-xl object-cover ring-2 ring-credem-yellow-400">
+                            <div class="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                <i class="fa-solid fa-pen text-[10px] text-white"></i>
+                            </div>
+                        </div>
+                        <span class="text-xs font-bold text-credem-green-900 dark:text-white hidden md:inline">${currentUser.name}</span>
+                        <button onclick="openEditProfileModal()" class="p-1.5 text-xs text-credem-yellow-600 dark:text-credem-yellow-400 hover:scale-110 transition" title="Modifica Foto"><i class="fa-solid fa-camera"></i></button>
+                        <button onclick="logout()" class="p-1.5 text-xs text-red-500 hover:text-red-700 transition" title="Esci"><i class="fa-solid fa-right-from-bracket"></i></button>
+                    </div>
+                `;
+                if (openNewMoodModalBtn) openNewMoodModalBtn.classList.remove('hidden');
+            } else {
+                userHeaderSection.innerHTML = `
+                    <button onclick="openAuthModal()" class="credem-btn-yellow font-extrabold px-4 py-2 rounded-2xl text-xs sm:text-sm shadow-md transition hover:scale-105 active:scale-95 flex items-center gap-2 border border-credem-yellow-300">
+                        <i class="fa-solid fa-right-to-bracket text-credem-green-900"></i>
+                        <span>Accedi / Registrati</span>
+                    </button>
+                `;
+                if (openNewMoodModalBtn) openNewMoodModalBtn.classList.add('hidden');
+            }
+        }
+
+        function renderPosts() {
+            postsContainer.innerHTML = '';
+            let filtered = currentFilter === 'all' ? moodPosts : moodPosts.filter(p => p.emoji === currentFilter);
+            totalPostsBadge.textContent = `(${moodPosts.length})`;
+
+            if (filtered.length === 0) {
+                postsContainer.classList.add('hidden');
+                emptyFeedState.classList.remove('hidden');
+                return;
+            }
+
+            postsContainer.classList.remove('hidden');
+            emptyFeedState.classList.add('hidden');
+
+            filtered.forEach(post => {
+                const author = members.find(m => m.id === post.memberId) || {
+                    name: 'Aderente TWL',
+                    avatar: 'https://picsum.photos/150',
+                    role: 'Membro Community'
+                };
+
+                const isMyPost = currentUser && post.memberId === currentUser.id;
+
+                const card = document.createElement('article');
+                card.className = 'glass-card rounded-3xl p-5 shadow-sm hover:shadow-md transition relative overflow-hidden flex flex-col justify-between border-2 border-credem-green-500/10 dark:border-credem-yellow-400/20';
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-start justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-3">
+                                <img src="${author.avatar}" class="w-12 h-12 rounded-2xl object-cover ring-2 ring-credem-green-600 dark:ring-credem-yellow-400">
+                                <div>
+                                    <h3 class="font-bold text-credem-green-900 dark:text-white text-base flex items-center gap-1.5">
+                                        ${author.name}
+                                        ${isMyPost ? '<span class="text-[10px] bg-credem-yellow-300 text-credem-green-900 font-extrabold px-2 py-0.5 rounded-full">Tu</span>' : ''}
+                                    </h3>
+                                    <p class="text-xs text-credem-green-700/70 dark:text-emerald-300 font-medium">${author.role}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1.5 rounded-2xl">
+                                <span class="text-2xl animate-float">${post.emoji}</span>
+                                <span class="text-xs font-black text-credem-green-800 dark:text-credem-yellow-300 hidden sm:inline-block">${post.moodText}</span>
+                            </div>
+                        </div>
+                        ${post.note ? `<p class="text-sm text-gray-700 dark:text-emerald-100 mb-4 bg-credem-green-50/50 dark:bg-credem-green-800/40 p-3 rounded-2xl border border-credem-green-100 dark:border-credem-green-800/60">${escapeHtml(post.note)}</p>` : ''}
+                    </div>
+                    <div class="flex items-center justify-between pt-3 border-t border-credem-green-100 dark:border-credem-green-800/80 text-xs text-credem-green-700 dark:text-emerald-300">
+                        <span><i class="fa-regular fa-clock"></i> ${post.time}</span>
+                        <div class="flex items-center gap-2">
+                            ${isMyPost ? `<button onclick="deleteMyMood('${post.id}')" class="p-1.5 text-xs text-red-500 hover:text-red-700" title="Elimina la tua emozione"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+                            <button onclick="toggleLike('${post.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${post.liked ? 'bg-credem-yellow-400 text-credem-green-900 font-black' : 'hover:bg-credem-green-100'} transition">
+                                <i class="${post.liked ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
+                                <span>${post.likes}</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                postsContainer.appendChild(card);
+            });
+        }
+
+        function renderMembers() {
+            membersListContainer.innerHTML = '';
+            memberCountBadge.textContent = `${members.length} Aderenti`;
+
+            if (members.length === 0) {
+                membersListContainer.innerHTML = `
+                    <div class="text-center py-8 text-credem-green-600/70 dark:text-emerald-400 text-xs font-medium">
+                        Nessun aderente ancora.<br>Invita i tuoi colleghi a registrarsi!
+                    </div>
+                `;
+                return;
+            }
+
+            members.forEach(member => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-2.5 rounded-2xl hover:bg-white/80 dark:hover:bg-credem-green-800/80 transition';
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <img src="${member.avatar}" class="w-10 h-10 rounded-xl object-cover ring-2 ring-credem-yellow-400/50">
+                        <div>
+                            <h4 class="text-xs font-bold text-credem-green-900 dark:text-white">${member.name}</h4>
+                            <p class="text-[11px] text-credem-green-700/70 dark:text-emerald-300">${member.role}</p>
+                        </div>
+                    </div>
+                `;
+                membersListContainer.appendChild(item);
+            });
+        }
+
+        // REGISTRAZIONE
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('regNameInput').value;
+            const role = document.getElementById('regRoleInput').value;
+            const email = document.getElementById('regEmailInput').value;
+            const password = document.getElementById('regPasswordInput').value;
+            const fileInput = document.getElementById('regFileInput');
+            let avatar = document.getElementById('regAvatarInput').value;
+
+            if (fileInput.files && fileInput.files[0]) {
+                avatar = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(fileInput.files[0]);
+                });
+            }
+
+            if (!avatar) {
+                avatar = `https://picsum.photos/seed/${Date.now()}/200`;
+            }
+
+            if (supabaseClient) {
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: { data: { name, role, avatar } }
+                });
+
+                if (error) {
+                    alert('Errore registrazione: ' + error.message);
+                    return;
+                }
+
+                if (data.user) {
+                    await supabaseClient.from('membri').upsert([{
+                        id: data.user.id,
+                        name: name,
+                        role: role,
+                        avatar: avatar
+                    }]);
+
+                    currentUser = { id: data.user.id, name, role, avatar };
+                }
+            }
+
+            await loadCloudData();
+            closeAuthModal();
+        });
+
+        // LOGIN
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmailInput').value;
+            const password = document.getElementById('loginPasswordInput').value;
+
+            if (supabaseClient) {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) {
+                    alert('Errore accesso: ' + error.message);
+                    return;
+                }
+                if (data.user) {
+                    currentUser = {
+                        id: data.user.id,
+                        name: data.user.user_metadata?.name || 'Utente TWL',
+                        role: data.user.user_metadata?.role || 'Aderente',
+                        avatar: data.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                    };
+
+                    await supabaseClient.from('membri').upsert([{
+                        id: currentUser.id,
+                        name: currentUser.name,
+                        role: currentUser.role,
+                        avatar: currentUser.avatar
+                    }]);
+                }
+            }
+            await loadCloudData();
+            closeAuthModal();
+        });
+
+        // MODIFICA PROFILO
+        document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const editFileInput = document.getElementById('editFileInput');
+            let newAvatar = document.getElementById('editAvatarInput').value;
+
+            if (editFileInput.files && editFileInput.files[0]) {
+                newAvatar = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(editFileInput.files[0]);
+                });
+            }
+
+            if (!newAvatar) {
+                alert('Seleziona una foto dal computer o inserisci un link URL.');
+                return;
+            }
+
+            currentUser.avatar = newAvatar;
+
+            if (supabaseClient) {
+                await supabaseClient.from('membri').upsert([{
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    role: currentUser.role,
+                    avatar: newAvatar
+                }]);
+
+                await supabaseClient.auth.updateUser({
+                    data: { avatar: newAvatar }
+                });
+            }
+
+            document.getElementById('editProfileForm').reset();
+            closeEditProfileModal();
+            await loadCloudData();
+        });
+
+        async function logout() {
+            if (supabaseClient) await supabaseClient.auth.signOut();
+            currentUser = null;
+            updateUserUI();
+            loadCloudData();
+        }
+
+        // PUBBLICAZIONE NUOVO MOOD
+        document.getElementById('moodForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return alert('Devi prima accedere!');
+
+            const emoji = document.getElementById('selectedEmojiInput').value;
+            const moodText = document.getElementById('moodLabelInput').value;
+            const note = document.getElementById('moodNoteInput').value;
+
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+
+            if (supabaseClient) {
+                await supabaseClient
+                    .from('umori')
+                    .delete()
+                    .eq('memberId', currentUser.id)
+                    .gte('created_at', startOfToday.toISOString());
+
+                await supabaseClient.from('umori').insert([{
+                    memberId: currentUser.id,
+                    emoji: emoji,
+                    moodText: moodText,
+                    note: note,
+                    likes: 0
+                }]);
+            }
+
+            document.getElementById('moodForm').reset();
+            closeMoodModal();
+            await loadCloudData();
+        });
+
+        async function deleteMyMood(postId) {
+            if (!confirm('Vuoi rimuovere la tua emozione di oggi?')) return;
+
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+
+            if (supabaseClient) {
+                await supabaseClient
+                    .from('umori')
+                    .delete()
+                    .eq('memberId', currentUser.id)
+                    .gte('created_at', startOfToday.toISOString());
+            }
+
+            await loadCloudData();
+        }
+
+        function selectModalEmoji(e, label) {
+            document.getElementById('selectedEmojiInput').value = e;
+            document.getElementById('moodLabelInput').value = label;
+        }
+
+        function toggleLike(postId) {
+            const post = moodPosts.find(p => p.id === postId);
+            if (post) {
+                post.liked = !post.liked;
+                post.likes += post.liked ? 1 : -1;
+                renderPosts();
+            }
+        }
+
+        function quickMood(emoji, label) {
+            if (!currentUser) {
+                openAuthModal();
+                return;
+            }
+            selectModalEmoji(emoji, label);
+            openMoodModal();
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCloudData();
+            setInterval(loadCloudData, 5000);
+        });
+    </script>
+</body>
+</html>
