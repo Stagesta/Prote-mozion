@@ -371,9 +371,7 @@
         function getSupabase() {
             if (!clientSupabase) {
                 if (window.supabase && window.supabase.createClient) {
-                    clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-                        auth: { persistSession: true }
-                    });
+                    clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 }
             }
             return clientSupabase;
@@ -488,9 +486,9 @@
                 if (postsData) {
                     moodPosts = postsData.map(p => ({
                         id: p.id,
-                        memberId: p.memberId || p.member_id,
+                        memberId: p.memberId,
                         emoji: p.emoji,
-                        moodText: p.moodText || p.mood_text,
+                        moodText: p.moodText,
                         note: p.note,
                         time: 'Oggi',
                         likes: p.likes || 0,
@@ -498,19 +496,29 @@
                     }));
                 }
 
-                const { data: authData } = await db.auth.getUser();
-                if (authData && authData.user) {
-                    const myMember = members.find(m => m.id === authData.user.id);
-                    currentUser = {
-                        id: authData.user.id,
-                        name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
-                        role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
-                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
-                    };
-                    updateUserUI();
+                if (!currentUser) {
+                    const { data: authData } = await db.auth.getUser();
+                    if (authData && authData.user) {
+                        const myMember = members.find(m => m.id === authData.user.id);
+                        currentUser = {
+                            id: authData.user.id,
+                            name: myMember?.name || authData.user.user_metadata?.name || 'Utente TWL',
+                            role: myMember?.role || authData.user.user_metadata?.role || 'Aderente',
+                            avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                        };
+                        updateUserUI();
+                    }
+                } else {
+                    const myMember = members.find(m => m.id === currentUser.id);
+                    if (myMember) {
+                        currentUser.avatar = myMember.avatar;
+                        currentUser.name = myMember.name;
+                        currentUser.role = myMember.role;
+                        updateUserUI();
+                    }
                 }
             } catch (err) {
-                console.warn('Sync warning:', err);
+                console.warn('Errore sincronizzazione:', err);
             }
 
             renderPosts();
@@ -548,8 +556,7 @@
 
             historyPostsContainer.innerHTML = '';
             historyData.forEach(post => {
-                const mId = post.memberId || post.member_id;
-                const author = members.find(m => m.id === mId) || {
+                const author = members.find(m => m.id === post.memberId) || {
                     name: 'Aderente TWL',
                     avatar: 'https://picsum.photos/150',
                     role: 'Membro Community'
@@ -568,7 +575,7 @@
                     </div>
                     <div class="flex items-center gap-1.5 bg-credem-yellow-300/30 border border-credem-yellow-400/60 px-3 py-1 rounded-xl">
                         <span class="text-xl">${post.emoji}</span>
-                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText || post.mood_text}</span>
+                        <span class="text-xs font-black text-credem-green-900 dark:text-credem-yellow-300">${post.moodText}</span>
                     </div>
                 `;
                 historyPostsContainer.appendChild(card);
@@ -612,7 +619,7 @@
             }
 
             postsContainer.classList.remove('hidden');
-            emptyFeedState.classList.add('hidden');
+            emptyFeedState.add('hidden');
 
             filtered.forEach(post => {
                 const author = members.find(m => m.id === post.memberId) || {
@@ -702,19 +709,35 @@
             btn.disabled = true;
             btn.innerText = "Accesso in corso...";
 
-            const { data, error } = await db.auth.signInWithPassword({ email, password });
-            
-            if (error) {
-                alert('❌ Accesso fallito: ' + error.message);
-                btn.disabled = false;
-                btn.innerText = "Accedi Ora";
-                return;
+            try {
+                const { data, error } = await db.auth.signInWithPassword({ email, password });
+                
+                if (error) {
+                    alert('❌ Accesso fallito: ' + error.message);
+                    btn.disabled = false;
+                    btn.innerText = "Accedi Ora";
+                    return;
+                }
+
+                if (data && data.user) {
+                    const myMember = members.find(m => m.id === data.user.id);
+                    currentUser = {
+                        id: data.user.id,
+                        name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
+                        role: myMember?.role || data.user.user_metadata?.role || 'Aderente',
+                        avatar: myMember?.avatar || data.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                    };
+
+                    closeAuthModal();
+                    updateUserUI();
+                    await loadCloudData();
+                }
+            } catch (err) {
+                alert("❌ Errore: " + err.message);
             }
 
             btn.disabled = false;
             btn.innerText = "Accedi Ora";
-            closeAuthModal();
-            await loadCloudData();
         }
 
         async function executeRegister() {
@@ -734,33 +757,37 @@
             btn.disabled = true;
             btn.innerText = "Registrazione...";
 
-            if (fileInput.files && fileInput.files[0]) {
-                avatar = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => resolve(e.target.result);
-                    reader.readAsDataURL(fileInput.files[0]);
+            try {
+                if (fileInput.files && fileInput.files[0]) {
+                    avatar = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsDataURL(fileInput.files[0]);
+                    });
+                }
+
+                if (!avatar) avatar = `https://picsum.photos/seed/${Date.now()}/200`;
+
+                const { data, error } = await db.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { name, role, avatar } }
                 });
-            }
 
-            if (!avatar) avatar = `https://picsum.photos/seed/${Date.now()}/200`;
+                if (error) {
+                    alert('❌ Registrazione fallita: ' + error.message);
+                    btn.disabled = false;
+                    btn.innerText = "Crea Account TWL";
+                    return;
+                }
 
-            const { data, error } = await db.auth.signUp({
-                email,
-                password,
-                options: { data: { name, role, avatar } }
-            });
-
-            if (error) {
-                alert('❌ Registrazione fallita: ' + error.message);
-                btn.disabled = false;
-                btn.innerText = "Crea Account TWL";
-                return;
-            }
-
-            if (data.user) {
-                await db.from('membri').upsert([{ id: data.user.id, name, role, avatar }]);
-                closeAuthModal();
-                await loadCloudData();
+                if (data.user) {
+                    await db.from('membri').upsert([{ id: data.user.id, name, role, avatar }]);
+                    closeAuthModal();
+                    await loadCloudData();
+                }
+            } catch (err) {
+                alert("❌ Errore: " + err.message);
             }
 
             btn.disabled = false;
@@ -800,52 +827,43 @@
             loadCloudData();
         }
 
-        // SALVATAGGIO DIRETTO DELL'EMOZIONE SENZA BLOCCARE IL PULSANTE
         async function executePostMood() {
             const db = getSupabase();
-            if (!db) return;
+            if (!db) return alert('Errore di connessione a Supabase');
+            if (!currentUser) return alert('Effettua prima il login');
 
-            const { data: authData } = await db.auth.getUser();
-            if (!authData || !authData.user) {
-                alert('Devi prima accedere!');
-                openAuthModal();
-                return;
-            }
-
-            const activeUserId = authData.user.id;
             const emoji = document.getElementById('selectedEmojiInput').value;
             const moodText = document.getElementById('moodLabelInput').value.trim();
             const note = document.getElementById('moodNoteInput').value.trim();
 
             if (!moodText) return alert("Scegli un'emozione.");
 
-            // Salva subito sia usando memberId che member_id per supportare qualsiasi colonna Supabase
-            const postPayload = {
-                memberId: activeUserId,
-                member_id: activeUserId,
-                emoji: emoji,
-                moodText: moodText,
-                mood_text: moodText,
-                note: note,
-                likes: 0
-            };
+            const btn = document.getElementById('submitMoodBtn');
+            btn.disabled = true;
+            btn.innerText = "Salvataggio...";
 
-            // Inserisci e chiudi subito la finestra
-            closeMoodModal();
-
-            const { error } = await db.from('umori').insert([postPayload]);
-            if (error) {
-                // Se c'è un errore sulle colonne duplicate, riprova con la versione pulita
-                await db.from('umori').insert([{
-                    memberId: activeUserId,
+            try {
+                // Inserimento pulito colonna standard memberId
+                const { error } = await db.from('umori').insert([{
+                    memberId: currentUser.id,
                     emoji: emoji,
                     moodText: moodText,
                     note: note,
                     likes: 0
                 }]);
+
+                if (error) {
+                    alert("❌ Errore durante il salvataggio: " + error.message);
+                } else {
+                    closeMoodModal();
+                    await loadCloudData();
+                }
+            } catch (err) {
+                alert("❌ Errore imprevisto: " + err.message);
             }
 
-            await loadCloudData();
+            btn.disabled = false;
+            btn.innerText = "Sostituisci Emozione";
         }
 
         async function deleteMyMood(postId) {
@@ -874,6 +892,10 @@
         }
 
         function quickMood(emoji, label) {
+            if (!currentUser) {
+                openAuthModal();
+                return;
+            }
             selectModalEmoji(emoji, label);
             openMoodModal();
         }
