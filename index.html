@@ -457,15 +457,23 @@
                     });
                 }
 
-                // 2. Scarica le emozioni recenti
+                // 2. Scarica le ultime emozioni condivise salvate nel cloud
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData && postsData.length > 0) {
-                    // Prende gli ultimi post inseriti
-                    moodPosts = postsData.map(p => ({
+                    // Mantiene visibile l'ultima emozione di ciascun membro
+                    const latestByMember = new Map();
+                    postsData.forEach(p => {
+                        const mId = p.memberId || p.member_id;
+                        if (mId && !latestByMember.has(mId)) {
+                            latestByMember.set(mId, p);
+                        }
+                    });
+
+                    moodPosts = Array.from(latestByMember.values()).map(p => ({
                         id: p.id,
                         memberId: p.memberId || p.member_id,
                         emoji: p.emoji,
@@ -477,7 +485,7 @@
                     }));
                 }
 
-                // 3. Controlla utente loggato
+                // 3. Verifica sessione utente
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = matchMember(authData.user.id);
