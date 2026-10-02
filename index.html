@@ -436,9 +436,18 @@
             return found ? String(found.id).trim().toLowerCase() : String(memberId).trim().toLowerCase();
         }
 
+        function isPostFromToday(createdAtString) {
+            if (!createdAtString) return true;
+            const postDate = new Date(createdAtString);
+            const now = new Date();
+            return postDate.getDate() === now.getDate() &&
+                   postDate.getMonth() === now.getMonth() &&
+                   postDate.getFullYear() === now.getFullYear();
+        }
+
         async function loadCloudData() {
             try {
-                // 1. Scarica i membri via HTTP nativo senza blocchi
+                // 1. Scarica i membri
                 const resMembri = await fetch(`${SUPABASE_URL}/rest/v1/membri?select=*`, {
                     headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
                 });
@@ -468,18 +477,22 @@
                 if (resUmori.ok) {
                     const postsData = await resUmori.json();
                     if (postsData && postsData.length > 0) {
-                        const uniqueMap = new Map();
+                        // FILTRO SOLTANTO POST DI OGGI + COMPATTAZIONE 1 PER UTENTE
+                        const uniqueTodayMap = new Map();
+
                         postsData.forEach(p => {
-                            const mId = p.memberId || p.member_id;
-                            if (mId) {
-                                const canonicalKey = getMemberCanonicalId(mId);
-                                if (!uniqueMap.has(canonicalKey)) {
-                                    uniqueMap.set(canonicalKey, p);
+                            if (isPostFromToday(p.created_at)) {
+                                const mId = p.memberId || p.member_id;
+                                if (mId) {
+                                    const canonicalKey = getMemberCanonicalId(mId);
+                                    if (!uniqueTodayMap.has(canonicalKey)) {
+                                        uniqueTodayMap.set(canonicalKey, p);
+                                    }
                                 }
                             }
                         });
 
-                        moodPosts = Array.from(uniqueMap.values()).map(p => ({
+                        moodPosts = Array.from(uniqueTodayMap.values()).map(p => ({
                             id: p.id,
                             memberId: p.memberId || p.member_id,
                             emoji: p.emoji,
@@ -649,7 +662,6 @@
             loadCloudData();
         }
 
-        // INVIO NATIVO DIRETTO
         async function executePostMood() {
             let activeUserId = currentUser ? currentUser.id : '4a1481e2-cc30-41eb-8e9e-175002fcfc';
 
