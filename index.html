@@ -457,14 +457,14 @@
                     });
                 }
 
-                // 2. Scarica tutte le emozioni
+                // 2. Scarica le emozioni ordinate per ID decrescente (le più recenti in cima)
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData && postsData.length > 0) {
-                    // Prende SOLO l'ultimo post inviato da ciascun utente
+                    // Mantiene SEMPRE E SOLO L'ULTIMO POST inserito per ogni utente
                     const latestByMember = new Map();
                     postsData.forEach(p => {
                         const mId = p.memberId || p.member_id;
@@ -807,13 +807,7 @@
 
             closeMoodModal();
 
-            // 1. Elimina preventivamente i vecchi post dell'utente su Supabase
-            try {
-                await db.from('umori').delete().eq('memberId', activeUserId);
-                await db.from('umori').delete().eq('member_id', activeUserId);
-            } catch(e) {}
-
-            // 2. Inserisce L'UNICA emozione aggiornata su Supabase
+            // Inserisce il nuovo post in modo diretto e sicuro
             try {
                 const { error } = await db.from('umori').insert([{
                     memberId: activeUserId,
@@ -845,7 +839,6 @@
             const db = getSupabase();
             if (db && currentUser) {
                 await db.from('umori').delete().eq('memberId', currentUser.id);
-                await db.from('umori').delete().eq('member_id', currentUser.id);
             }
 
             await loadCloudData();
