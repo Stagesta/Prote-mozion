@@ -457,14 +457,14 @@
                     });
                 }
 
-                // 2. Scarica le ultime emozioni condivise salvate nel cloud
+                // 2. Scarica tutte le emozioni
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData && postsData.length > 0) {
-                    // Mantiene visibile l'ultima emozione di ciascun membro
+                    // Prende SOLO l'ultimo post inviato da ciascun utente
                     const latestByMember = new Map();
                     postsData.forEach(p => {
                         const mId = p.memberId || p.member_id;
@@ -485,7 +485,7 @@
                     }));
                 }
 
-                // 3. Verifica sessione utente
+                // 3. Controlla utente loggato
                 const { data: authData } = await db.auth.getUser();
                 if (authData && authData.user) {
                     const myMember = matchMember(authData.user.id);
@@ -807,21 +807,13 @@
 
             closeMoodModal();
 
-            const localPost = {
-                id: Date.now(),
-                memberId: activeUserId,
-                emoji: emoji,
-                moodText: moodText,
-                note: note,
-                time: 'Oggi',
-                likes: 0,
-                liked: false
-            };
+            // 1. Elimina preventivamente i vecchi post dell'utente su Supabase
+            try {
+                await db.from('umori').delete().eq('memberId', activeUserId);
+                await db.from('umori').delete().eq('member_id', activeUserId);
+            } catch(e) {}
 
-            moodPosts = moodPosts.filter(p => !matchMember(p.memberId) || matchMember(p.memberId).id !== matchMember(activeUserId)?.id);
-            moodPosts.unshift(localPost);
-            renderPosts();
-
+            // 2. Inserisce L'UNICA emozione aggiornata su Supabase
             try {
                 const { error } = await db.from('umori').insert([{
                     memberId: activeUserId,
@@ -853,6 +845,7 @@
             const db = getSupabase();
             if (db && currentUser) {
                 await db.from('umori').delete().eq('memberId', currentUser.id);
+                await db.from('umori').delete().eq('member_id', currentUser.id);
             }
 
             await loadCloudData();
