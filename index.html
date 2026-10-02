@@ -338,19 +338,24 @@
         const SUPABASE_URL = 'https://ersmtkwotehaflboealn.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyc210a3dvdGVoYWZsYm9lYWxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NjkxMTEsImV4cCI6MjEwNjI0NTExMX0.gdfJb0L3aS4r6Ke6b1jjjr0YmluvxK4sak4LiVRPVR0';
         
+        let clientSupabase = null;
+
+        function getSupabase() {
+            if (!clientSupabase) {
+                if (window.supabase && window.supabase.createClient) {
+                    clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                }
+            }
+            return clientSupabase;
+        }
+
         let members = [
             { id: '4a1481e2-cc30-41eb-8e9e-175002fcfc', name: 'Sebastiano Milici', role: 'Stage', avatar: 'https://picsum.photos/seed/sebastiano/200' },
             { id: '5ae3328e-682d-4e7f-9817-f45b5edbf', name: 'riccardo cammi', role: 'stagista', avatar: 'https://picsum.photos/seed/riccardo/200' },
             { id: 'efe555d9-63bc-4d12-8fa3-c1bdeceb7', name: 'Alessandro Baracchi', role: 'Welfare Specialist', avatar: 'https://picsum.photos/seed/alessandro/200' }
         ];
 
-        let currentUser = {
-            id: '4a1481e2-cc30-41eb-8e9e-175002fcfc',
-            name: 'Sebastiano Milici',
-            role: 'Stage',
-            avatar: 'https://picsum.photos/seed/sebastiano/200'
-        };
-
+        let currentUser = null; // Di default NESSUN utente loggato
         let moodPosts = [];
         let currentFilter = 'all';
 
@@ -384,6 +389,10 @@
         }
 
         function openMoodModal() {
+            if (!currentUser) {
+                openAuthModal();
+                return;
+            }
             moodModal.classList.remove('opacity-0', 'pointer-events-none');
             moodModalCard.classList.remove('scale-95');
         }
@@ -477,7 +486,6 @@
                 if (resUmori.ok) {
                     const postsData = await resUmori.json();
                     if (postsData && postsData.length > 0) {
-                        // FILTRO SOLTANTO POST DI OGGI + COMPATTAZIONE 1 PER UTENTE
                         const uniqueTodayMap = new Map();
 
                         postsData.forEach(p => {
@@ -504,6 +512,23 @@
                         }));
                     } else {
                         moodPosts = [];
+                    }
+                }
+
+                // 3. Controlla utente loggato su Supabase
+                const db = getSupabase();
+                if (db) {
+                    const { data: authData } = await db.auth.getUser();
+                    if (authData && authData.user) {
+                        const myMember = matchMember(authData.user.id);
+                        currentUser = {
+                            id: String(authData.user.id).trim(),
+                            name: myMember?.name || authData.user.user_metadata?.name || 'Aderente TWL',
+                            role: myMember?.role || authData.user.user_metadata?.role || 'Membro Community',
+                            avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/seed/user/200'
+                        };
+                    } else {
+                        currentUser = null;
                     }
                 }
 
@@ -538,6 +563,22 @@
                         </button>
                     `;
                 }
+            } else {
+                userHeaderSection.innerHTML = `
+                    <button onclick="openAuthModal()" class="credem-btn-yellow font-extrabold px-4 py-2 rounded-2xl text-xs sm:text-sm shadow-md transition hover:scale-105 active:scale-95 flex items-center gap-2 border border-credem-yellow-300">
+                        <i class="fa-solid fa-right-to-bracket text-credem-green-900"></i>
+                        <span>Accedi / Registrati</span>
+                    </button>
+                `;
+                if (openNewMoodModalBtn) openNewMoodModalBtn.classList.add('hidden');
+
+                if (emptyFeedBtnContainer) {
+                    emptyFeedBtnContainer.innerHTML = `
+                        <button onclick="openAuthModal()" class="px-5 py-2.5 credem-btn-yellow font-black rounded-xl text-xs shadow-md">
+                            Accedi o Registrati Ora
+                        </button>
+                    `;
+                }
             }
         }
 
@@ -557,9 +598,9 @@
 
             filtered.forEach(post => {
                 const author = matchMember(post.memberId) || {
-                    name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Sebastiano Milici',
-                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/seed/sebastiano/200',
-                    role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Stage'
+                    name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Aderente TWL',
+                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/seed/user/200',
+                    role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Membro Community'
                 };
 
                 const isMyPost = currentUser && getMemberCanonicalId(post.memberId) === getMemberCanonicalId(currentUser.id);
@@ -645,25 +686,135 @@
         }
 
         async function executeLogin() {
-            openAuthModal();
+            const db = getSupabase();
+            if (!db) return alert("❌ Errore: Impossibile connettersi a Supabase.");
+
+            const email = document.getElementById('loginEmailInput').value.trim();
+            const password = document.getElementById('loginPasswordInput').value.trim();
+
+            if (!email || !password) return alert("⚠️ Inserisci email e password.");
+
+            const btn = document.getElementById('loginSubmitBtn');
+            btn.disabled = true;
+            btn.innerText = "Accesso in corso...";
+
+            try {
+                const { data, error } = await db.auth.signInWithPassword({ email, password });
+                
+                if (error) {
+                    alert('❌ Accesso fallito: ' + error.message);
+                    btn.disabled = false;
+                    btn.innerText = "Accedi Ora";
+                    return;
+                }
+
+                if (data && data.user) {
+                    closeAuthModal();
+                    await loadCloudData();
+                }
+            } catch (err) {
+                alert("❌ Errore: " + err.message);
+            }
+
+            btn.disabled = false;
+            btn.innerText = "Accedi Ora";
         }
 
         async function executeRegister() {
-            openAuthModal();
+            const db = getSupabase();
+            if (!db) return alert("❌ Errore connettività.");
+
+            const name = document.getElementById('regNameInput').value.trim();
+            const role = document.getElementById('regRoleInput').value.trim();
+            const email = document.getElementById('regEmailInput').value.trim();
+            const password = document.getElementById('regPasswordInput').value.trim();
+            const fileInput = document.getElementById('regFileInput');
+            let avatar = document.getElementById('regAvatarInput').value.trim();
+
+            if (!name || !role || !email || !password) return alert("⚠️ Compila tutti i campi.");
+
+            const btn = document.getElementById('regSubmitBtn');
+            btn.disabled = true;
+            btn.innerText = "Registrazione...";
+
+            try {
+                if (fileInput.files && fileInput.files[0]) {
+                    avatar = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsDataURL(fileInput.files[0]);
+                    });
+                }
+
+                if (!avatar) avatar = `https://picsum.photos/seed/${Date.now()}/200`;
+
+                const { data, error } = await db.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { name, role, avatar } }
+                });
+
+                if (error) {
+                    alert('❌ Registrazione fallita: ' + error.message);
+                    btn.disabled = false;
+                    btn.innerText = "Crea Account TWL";
+                    return;
+                }
+
+                if (data.user) {
+                    await db.from('membri').upsert([{ id: data.user.id, name, role, avatar }]);
+                    closeAuthModal();
+                    await loadCloudData();
+                }
+            } catch (err) {
+                alert("❌ Errore: " + err.message);
+            }
+
+            btn.disabled = false;
+            btn.innerText = "Crea Account TWL";
         }
 
         async function executeEditProfile() {
+            const db = getSupabase();
+            if (!currentUser || !db) return;
+
+            const editFileInput = document.getElementById('editFileInput');
+            let newAvatar = document.getElementById('editAvatarInput').value.trim();
+
+            if (editFileInput.files && editFileInput.files[0]) {
+                newAvatar = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(editFileInput.files[0]);
+                });
+            }
+
+            if (!newAvatar) return alert('Seleziona un file o un URL.');
+
+            currentUser.avatar = newAvatar;
+            await db.from('membri').upsert([{ id: currentUser.id, name: currentUser.name, role: currentUser.role, avatar: newAvatar }]);
+            await db.auth.updateUser({ data: { avatar: newAvatar } });
+
             closeEditProfileModal();
+            await loadCloudData();
         }
 
         async function logout() {
+            const db = getSupabase();
+            if (db) {
+                await db.auth.signOut();
+            }
             currentUser = null;
             updateUserUI();
-            loadCloudData();
+            await loadCloudData();
         }
 
         async function executePostMood() {
-            let activeUserId = currentUser ? currentUser.id : '4a1481e2-cc30-41eb-8e9e-175002fcfc';
+            if (!currentUser) {
+                alert("⚠️ Devi prima accedere con il tuo account.");
+                openAuthModal();
+                return;
+            }
 
             const emoji = document.getElementById('selectedEmojiInput').value;
             const moodText = document.getElementById('moodLabelInput').value.trim();
@@ -674,7 +825,7 @@
             closeMoodModal();
 
             const bodyPayload = JSON.stringify([{
-                memberId: activeUserId,
+                memberId: currentUser.id,
                 emoji: emoji,
                 moodText: moodText,
                 note: note,
@@ -695,7 +846,7 @@
 
                 if (!response.ok) {
                     const errText = await response.text();
-                    alert("⚠️ Errore risposta Supabase: " + errText);
+                    alert("⚠️️ Errore risposta Supabase: " + errText);
                 }
             } catch (err) {
                 alert("⚠️ Errore di rete: " + err.message);
@@ -706,6 +857,7 @@
 
         async function deleteMyMood(postId) {
             if (!confirm('Vuoi rimuovere la tua emozione di oggi?')) return;
+            if (!currentUser) return;
 
             try {
                 await fetch(`${SUPABASE_URL}/rest/v1/umori?memberId=eq.${currentUser.id}`, {
@@ -732,6 +884,10 @@
         }
 
         function quickMood(emoji, label) {
+            if (!currentUser) {
+                openAuthModal();
+                return;
+            }
             selectModalEmoji(emoji, label);
             openMoodModal();
         }
