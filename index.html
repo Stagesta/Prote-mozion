@@ -462,14 +462,14 @@
                     });
                 }
 
-                // 2. Scarica i post ordinati dal più recente
+                // 2. Scarica i post ordinati dal più recente (ID decrescente)
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData && postsData.length > 0) {
-                    // COMPATTAZIONE RIGOROSA: Mantiene SOLO l'ultimo post inserito per ciascun ID utente
+                    // COMPATTAZIONE GARANTITA: Tiene SOLO l'ultimo post inserito per ciascun membro
                     const uniqueMap = new Map();
 
                     postsData.forEach(p => {
