@@ -326,7 +326,7 @@
 
                 <div class="flex justify-end gap-3 pt-3 border-t border-credem-green-100 dark:border-credem-green-800">
                     <button type="button" onclick="closeMoodModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 dark:text-emerald-300 hover:bg-gray-100 transition">Annulla</button>
-                    <button type="button" id="submitMoodBtn" onclick="executePostMood()" class="credem-btn-yellow px-5 py-2 rounded-xl text-sm font-black shadow-md transition">Sostituisci Emozione</button>
+                    <button type="button" id="submitMoodBtn" onclick="executePostMood()" class="credem-btn-yellow px-5 py-2 rounded-xl text-sm font-black shadow-md transition">Inserisci Emozione</button>
                 </div>
             </div>
         </div>
@@ -478,7 +478,8 @@
                         postsData.forEach(p => {
                             if (isPostFromToday(p.created_at)) {
                                 const mId = p.memberId || p.member_id;
-                                if (mId) {
+                                const memberFound = matchMember(mId);
+                                if (mId && memberFound) {
                                     const canonicalKey = getMemberCanonicalId(mId);
                                     if (!uniqueTodayMap.has(canonicalKey)) {
                                         uniqueTodayMap.set(canonicalKey, p);
@@ -502,7 +503,7 @@
                     }
                 }
 
-                // 3. Ripristina la sessione dell'utente salvata in locale
+                // 3. Ripristina utente salvato
                 const savedUser = localStorage.getItem('twl_logged_user');
                 if (savedUser) {
                     try {
@@ -667,7 +668,6 @@
             renderMembers(searchTerm);
         }
 
-        // LOGIN NATIVO HTTP SENZA BLOCCHI SDK
         async function executeLogin() {
             const email = document.getElementById('loginEmailInput').value.trim();
             const password = document.getElementById('loginPasswordInput').value.trim();
@@ -719,7 +719,6 @@
             btn.innerText = "Accedi Ora";
         }
 
-        // REGISTRAZIONE NATIVA HTTP
         async function executeRegister() {
             const name = document.getElementById('regNameInput').value.trim();
             const role = document.getElementById('regRoleInput').value.trim();
