@@ -441,83 +441,85 @@
         }
 
         async function loadCloudData() {
-            const db = getSupabase();
-            if (!db) return;
-
             try {
-                // 1. Scarica i membri
-                const { data: membersData } = await db.from('membri').select('*');
-                if (membersData && membersData.length > 0) {
-                    members = membersData.map(m => {
-                        let av = m.avatar || m.foto;
-                        if (!av || (typeof av === 'string' && av.length > 500)) {
-                            av = `https://picsum.photos/seed/${m.id}/200`;
-                        }
-                        return {
-                            id: String(m.id).trim(),
-                            name: m.name || m.nome || 'Aderente TWL',
-                            role: m.role || m.ruolo || 'Membro Community',
-                            avatar: av
-                        };
-                    });
-                }
-
-                // 2. Scarica i post ordinati dal più recente (ID decrescente)
-                const { data: postsData } = await db
-                    .from('umori')
-                    .select('*')
-                    .order('id', { ascending: false });
-
-                if (postsData && postsData.length > 0) {
-                    // COMPATTAZIONE GARANTITA: Tiene SOLO l'ultimo post inserito per ciascun membro
-                    const uniqueMap = new Map();
-
-                    postsData.forEach(p => {
-                        const mId = p.memberId || p.member_id;
-                        if (mId) {
-                            const canonicalKey = getMemberCanonicalId(mId);
-                            // Essendo ordinati desc per ID, salviamo solo la prima occorrenza (la più recente)
-                            if (!uniqueMap.has(canonicalKey)) {
-                                uniqueMap.set(canonicalKey, p);
+                // 1. Scarica i membri via HTTP nativo
+                const resMembri = await fetch(`${SUPABASE_URL}/rest/v1/membri?select=*`, {
+                    headers: { credentials: 'omit', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                if (resMembri.ok) {
+                    const membersData = await resMembri.json();
+                    if (membersData && membersData.length > 0) {
+                        members = membersData.map(m => {
+                            let av = m.avatar || m.foto;
+                            if (!av || (typeof av === 'string' && av.length > 500)) {
+                                av = `https://picsum.photos/seed/${m.id}/200`;
                             }
-                        }
-                    });
-
-                    moodPosts = Array.from(uniqueMap.values()).map(p => ({
-                        id: p.id,
-                        memberId: p.memberId || p.member_id,
-                        emoji: p.emoji,
-                        moodText: p.moodText || p.mood_text,
-                        note: p.note,
-                        time: 'Oggi',
-                        likes: p.likes || 0,
-                        liked: false
-                    }));
-                } else {
-                    moodPosts = [];
+                            return {
+                                id: String(m.id).trim(),
+                                name: m.name || m.nome || 'Aderente TWL',
+                                role: m.role || m.ruolo || 'Membro Community',
+                                avatar: av
+                            };
+                        });
+                    }
                 }
 
-                // 3. Controlla utente loggato
-                const { data: authData } = await db.auth.getUser();
-                if (authData && authData.user) {
-                    const myMember = matchMember(authData.user.id);
-                    currentUser = {
-                        id: String(authData.user.id).trim(),
-                        name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
-                        role: myMember?.role || authData.user.user_metadata?.role || 'Stage',
-                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/seed/sebastiano/200'
-                    };
+                // 2. Scarica i post ordinati dal più recente
+                const resUmori = await fetch(`${SUPABASE_URL}/rest/v1/umori?select=*&order=id.desc`, {
+                    headers: { credentials: 'omit', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
 
-                    updateUserUI();
-                } else {
-                    currentUser = {
-                        id: '4a1481e2-cc30-41eb-8e9e-175002fcfc',
-                        name: 'Sebastiano Milici',
-                        role: 'Stage',
-                        avatar: 'https://picsum.photos/seed/sebastiano/200'
-                    };
-                    updateUserUI();
+                if (resUmori.ok) {
+                    const postsData = await resUmori.json();
+                    if (postsData && postsData.length > 0) {
+                        const uniqueMap = new Map();
+                        postsData.forEach(p => {
+                            const mId = p.memberId || p.member_id;
+                            if (mId) {
+                                const canonicalKey = getMemberCanonicalId(mId);
+                                if (!uniqueMap.has(canonicalKey)) {
+                                    uniqueMap.set(canonicalKey, p);
+                                }
+                            }
+                        });
+
+                        moodPosts = Array.from(uniqueMap.values()).map(p => ({
+                            id: p.id,
+                            memberId: p.memberId || p.member_id,
+                            emoji: p.emoji,
+                            moodText: p.moodText || p.mood_text,
+                            note: p.note,
+                            time: 'Oggi',
+                            likes: p.likes || 0,
+                            liked: false
+                        }));
+                    } else {
+                        moodPosts = [];
+                    }
                 }
+
+                // 3. Utente di default
+                currentUser = {
+                    id: '4a1481e2-cc30-41eb-8e9e-175002fcfc',
+                    name: 'Sebastiano Milici',
+                    role: 'Stage',
+                    avatar: 'https://picsum.photos/seed/sebastiano/200'
+                };
+
+                const db = getSupabase();
+                if (db) {
+                    const { data: authData } = await db.auth.getUser();
+                    if (authData && authData.user) {
+                        const myMember = matchMember(authData.user.id);
+                        currentUser = {
+                            id: String(authData.user.id).trim(),
+                            name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
+                            role: myMember?.role || authData.user.user_metadata?.role || 'Stage',
+                            avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/seed/sebastiano/200'
+                        };
+                    }
+                }
+                updateUserUI();
             } catch (err) {
                 console.warn('Sync warning:', err);
             }
@@ -801,10 +803,8 @@
             loadCloudData();
         }
 
+        // INVIO HTTP DIRETTO CHE EVITA IL BLOCCO PENDING
         async function executePostMood() {
-            const db = getSupabase();
-            if (!db) return alert('Errore di connessione a Supabase');
-
             let activeUserId = currentUser ? currentUser.id : '4a1481e2-cc30-41eb-8e9e-175002fcfc';
 
             const emoji = document.getElementById('selectedEmojiInput').value;
@@ -815,26 +815,32 @@
 
             closeMoodModal();
 
-            try {
-                const { error } = await db.from('umori').insert([{
-                    memberId: activeUserId,
-                    emoji: emoji,
-                    moodText: moodText,
-                    note: note,
-                    likes: 0
-                }]);
+            const bodyPayload = JSON.stringify([{
+                memberId: activeUserId,
+                emoji: emoji,
+                moodText: moodText,
+                note: note,
+                likes: 0
+            }]);
 
-                if (error) {
-                    await db.from('umori').insert([{
-                        member_id: activeUserId,
-                        emoji: emoji,
-                        mood_text: moodText,
-                        note: note,
-                        likes: 0
-                    }]);
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/umori`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Prefer': 'return=minimal'
+                    },
+                    body: bodyPayload
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    alert("⚠️ Errore risposta Supabase: " + errText);
                 }
             } catch (err) {
-                console.warn("Post sync error:", err);
+                alert("⚠️️ Errore di rete: " + err.message);
             }
 
             await loadCloudData();
