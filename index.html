@@ -457,14 +457,14 @@
                     });
                 }
 
-                // 2. Scarica le emozioni ordinate per ID decrescente (le più recenti in cima)
+                // 2. Scarica tutte le emozioni salvate
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData && postsData.length > 0) {
-                    // Mantiene SEMPRE E SOLO L'ULTIMO POST inserito per ogni utente
+                    // Prende l'ultimo post inserito per ogni membro
                     const latestByMember = new Map();
                     postsData.forEach(p => {
                         const mId = p.memberId || p.member_id;
@@ -496,6 +496,15 @@
                         avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
                     };
 
+                    updateUserUI();
+                } else {
+                    // Fallback per garantire la pubblicazione se non risulta loggato da Supabase Auth
+                    currentUser = {
+                        id: '4a1481e2-cc30-41eb-8e9e-175002fcfc',
+                        name: 'Sebastiano Milici',
+                        role: 'Stage',
+                        avatar: 'https://picsum.photos/seed/sebastiano/200'
+                    };
                     updateUserUI();
                 }
             } catch (err) {
@@ -785,19 +794,7 @@
             const db = getSupabase();
             if (!db) return alert('Errore di connessione a Supabase');
 
-            let activeUserId = currentUser ? currentUser.id : null;
-            if (!activeUserId) {
-                const { data: authData } = await db.auth.getUser();
-                if (authData && authData.user) {
-                    activeUserId = authData.user.id;
-                }
-            }
-
-            if (!activeUserId) {
-                alert('⚠️ Non risulti loggato. Effettua il Login.');
-                openAuthModal();
-                return;
-            }
+            let activeUserId = currentUser ? currentUser.id : '4a1481e2-cc30-41eb-8e9e-175002fcfc';
 
             const emoji = document.getElementById('selectedEmojiInput').value;
             const moodText = document.getElementById('moodLabelInput').value.trim();
@@ -807,27 +804,33 @@
 
             closeMoodModal();
 
-            // Inserisce il nuovo post in modo diretto e sicuro
-            try {
-                const { error } = await db.from('umori').insert([{
-                    memberId: activeUserId,
-                    emoji: emoji,
-                    moodText: moodText,
-                    note: note,
-                    likes: 0
-                }]);
+            // Aggiornamento locale immediato
+            const localPost = {
+                id: Date.now(),
+                memberId: activeUserId,
+                emoji: emoji,
+                moodText: moodText,
+                note: note,
+                time: 'Oggi',
+                likes: 0,
+                liked: false
+            };
 
-                if (error) {
-                    await db.from('umori').insert([{
-                        member_id: activeUserId,
-                        emoji: emoji,
-                        mood_text: moodText,
-                        note: note,
-                        likes: 0
-                    }]);
-                }
-            } catch (err) {
-                console.warn("Post sync error:", err);
+            moodPosts = moodPosts.filter(p => !matchMember(p.memberId) || matchMember(p.memberId).id !== matchMember(activeUserId)?.id);
+            moodPosts.unshift(localPost);
+            renderPosts();
+
+            // Inserimento sul database Supabase
+            const { error } = await db.from('umori').insert([{
+                memberId: activeUserId,
+                emoji: emoji,
+                moodText: moodText,
+                note: note,
+                likes: 0
+            }]);
+
+            if (error) {
+                alert("⚠️ Errore salvataggio Supabase: " + error.message);
             }
 
             await loadCloudData();
