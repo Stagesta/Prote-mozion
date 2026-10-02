@@ -435,11 +435,6 @@
             });
         }
 
-        function getMemberCanonicalId(memberId) {
-            const m = matchMember(memberId);
-            return m ? String(m.id).trim().toLowerCase() : String(memberId).trim().toLowerCase();
-        }
-
         async function loadCloudData() {
             const db = getSupabase();
             if (!db) return;
@@ -454,7 +449,7 @@
                             av = `https://picsum.photos/seed/${m.id}/200`;
                         }
                         return {
-                            id: String(m.id).trim(),
+                            id: m.id,
                             name: m.name || m.nome || 'Aderente TWL',
                             role: m.role || m.ruolo || 'Membro Community',
                             avatar: av
@@ -462,26 +457,14 @@
                     });
                 }
 
-                // 2. Scarica tutte le emozioni ordinate dalle più recenti (ID decrescente)
+                // 2. Scarica i post
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
-                if (postsData && postsData.length > 0) {
-                    // COMPATTAZIONE FORZATA: Mantiene SOLO L'ULTIMO POST per ciascun membro
-                    const latestByMember = new Map();
-                    postsData.forEach(p => {
-                        const rawId = p.memberId || p.member_id;
-                        if (rawId) {
-                            const canonicalId = getMemberCanonicalId(rawId);
-                            if (!latestByMember.has(canonicalId)) {
-                                latestByMember.set(canonicalId, p);
-                            }
-                        }
-                    });
-
-                    moodPosts = Array.from(latestByMember.values()).map(p => ({
+                if (postsData) {
+                    moodPosts = postsData.map(p => ({
                         id: p.id,
                         memberId: p.memberId || p.member_id,
                         emoji: p.emoji,
@@ -491,8 +474,6 @@
                         likes: p.likes || 0,
                         liked: false
                     }));
-                } else {
-                    moodPosts = [];
                 }
 
                 // 3. Controlla utente loggato
@@ -500,20 +481,12 @@
                 if (authData && authData.user) {
                     const myMember = matchMember(authData.user.id);
                     currentUser = {
-                        id: String(authData.user.id).trim(),
+                        id: authData.user.id,
                         name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
                         role: myMember?.role || authData.user.user_metadata?.role || 'Stage',
-                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/seed/sebastiano/200'
+                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
                     };
 
-                    updateUserUI();
-                } else {
-                    currentUser = {
-                        id: '4a1481e2-cc30-41eb-8e9e-175002fcfc',
-                        name: 'Sebastiano Milici',
-                        role: 'Stage',
-                        avatar: 'https://picsum.photos/seed/sebastiano/200'
-                    };
                     updateUserUI();
                 }
             } catch (err) {
@@ -582,11 +555,11 @@
             filtered.forEach(post => {
                 const author = matchMember(post.memberId) || {
                     name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Sebastiano Milici',
-                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/seed/sebastiano/200',
+                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/200',
                     role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Stage'
                 };
 
-                const isMyPost = currentUser && getMemberCanonicalId(post.memberId) === getMemberCanonicalId(currentUser.id);
+                const isMyPost = currentUser && matchMember(post.memberId)?.id === currentUser.id;
 
                 const card = document.createElement('article');
                 card.className = 'glass-card rounded-3xl p-5 shadow-sm hover:shadow-md transition relative overflow-hidden flex flex-col justify-between border-2 border-credem-green-500/10 dark:border-credem-yellow-400/20';
@@ -694,7 +667,7 @@
                 if (data && data.user) {
                     const myMember = matchMember(data.user.id);
                     currentUser = {
-                        id: String(data.user.id).trim(),
+                        id: data.user.id,
                         name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
                         role: myMember?.role || data.user.user_metadata?.role || 'Aderente',
                         avatar: myMember?.avatar || data.user.user_metadata?.avatar || 'https://picsum.photos/200'
@@ -803,7 +776,19 @@
             const db = getSupabase();
             if (!db) return alert('Errore di connessione a Supabase');
 
-            let activeUserId = currentUser ? currentUser.id : '4a1481e2-cc30-41eb-8e9e-175002fcfc';
+            let activeUserId = currentUser ? currentUser.id : null;
+            if (!activeUserId) {
+                const { data: authData } = await db.auth.getUser();
+                if (authData && authData.user) {
+                    activeUserId = authData.user.id;
+                }
+            }
+
+            if (!activeUserId) {
+                alert('⚠️ Non risulti loggato. Effettua il Login.');
+                openAuthModal();
+                return;
+            }
 
             const emoji = document.getElementById('selectedEmojiInput').value;
             const moodText = document.getElementById('moodLabelInput').value.trim();
@@ -813,17 +798,41 @@
 
             closeMoodModal();
 
-            // Inserimento sul database Supabase con nome colonna memberId
-            const { error } = await db.from('umori').insert([{
+            const localPost = {
+                id: Date.now(),
                 memberId: activeUserId,
                 emoji: emoji,
                 moodText: moodText,
                 note: note,
-                likes: 0
-            }]);
+                time: 'Oggi',
+                likes: 0,
+                liked: false
+            };
 
-            if (error) {
-                alert("⚠️ Errore salvataggio Supabase: " + error.message);
+            moodPosts = moodPosts.filter(p => !matchMember(p.memberId) || matchMember(p.memberId).id !== matchMember(activeUserId)?.id);
+            moodPosts.unshift(localPost);
+            renderPosts();
+
+            try {
+                const { error } = await db.from('umori').insert([{
+                    memberId: activeUserId,
+                    emoji: emoji,
+                    moodText: moodText,
+                    note: note,
+                    likes: 0
+                }]);
+
+                if (error) {
+                    await db.from('umori').insert([{
+                        member_id: activeUserId,
+                        emoji: emoji,
+                        mood_text: moodText,
+                        note: note,
+                        likes: 0
+                    }]);
+                }
+            } catch (err) {
+                console.warn("Post sync error:", err);
             }
 
             await loadCloudData();
