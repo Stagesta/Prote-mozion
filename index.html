@@ -469,7 +469,7 @@
                     .order('id', { ascending: false });
 
                 if (postsData && postsData.length > 0) {
-                    // COMPATTAZIONE GARANTITA SULL'AUTORE CANONICO
+                    // COMPATTAZIONE RIGOROSA: Mantiene SOLO l'ultimo post inserito per ciascun ID utente
                     const uniqueMap = new Map();
 
                     postsData.forEach(p => {
