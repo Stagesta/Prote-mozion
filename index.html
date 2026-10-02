@@ -10,8 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <script>
         tailwind.config = {
@@ -338,24 +336,13 @@
         const SUPABASE_URL = 'https://ersmtkwotehaflboealn.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyc210a3dvdGVoYWZsYm9lYWxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NjkxMTEsImV4cCI6MjEwNjI0NTExMX0.gdfJb0L3aS4r6Ke6b1jjjr0YmluvxK4sak4LiVRPVR0';
         
-        let clientSupabase = null;
-
-        function getSupabase() {
-            if (!clientSupabase) {
-                if (window.supabase && window.supabase.createClient) {
-                    clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-                }
-            }
-            return clientSupabase;
-        }
-
         let members = [
             { id: '4a1481e2-cc30-41eb-8e9e-175002fcfc', name: 'Sebastiano Milici', role: 'Stage', avatar: 'https://picsum.photos/seed/sebastiano/200' },
             { id: '5ae3328e-682d-4e7f-9817-f45b5edbf', name: 'riccardo cammi', role: 'stagista', avatar: 'https://picsum.photos/seed/riccardo/200' },
             { id: 'efe555d9-63bc-4d12-8fa3-c1bdeceb7', name: 'Alessandro Baracchi', role: 'Welfare Specialist', avatar: 'https://picsum.photos/seed/alessandro/200' }
         ];
 
-        let currentUser = null; // Di default NESSUN utente loggato
+        let currentUser = null;
         let moodPosts = [];
         let currentFilter = 'all';
 
@@ -515,21 +502,16 @@
                     }
                 }
 
-                // 3. Controlla utente loggato su Supabase
-                const db = getSupabase();
-                if (db) {
-                    const { data: authData } = await db.auth.getUser();
-                    if (authData && authData.user) {
-                        const myMember = matchMember(authData.user.id);
-                        currentUser = {
-                            id: String(authData.user.id).trim(),
-                            name: myMember?.name || authData.user.user_metadata?.name || 'Aderente TWL',
-                            role: myMember?.role || authData.user.user_metadata?.role || 'Membro Community',
-                            avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/seed/user/200'
-                        };
-                    } else {
+                // 3. Ripristina la sessione dell'utente salvata in locale
+                const savedUser = localStorage.getItem('twl_logged_user');
+                if (savedUser) {
+                    try {
+                        currentUser = JSON.parse(savedUser);
+                    } catch(e) {
                         currentUser = null;
                     }
+                } else {
+                    currentUser = null;
                 }
 
                 updateUserUI();
@@ -685,10 +667,8 @@
             renderMembers(searchTerm);
         }
 
+        // LOGIN NATIVO HTTP SENZA BLOCCHI SDK
         async function executeLogin() {
-            const db = getSupabase();
-            if (!db) return alert("❌ Errore: Impossibile connettersi a Supabase.");
-
             const email = document.getElementById('loginEmailInput').value.trim();
             const password = document.getElementById('loginPasswordInput').value.trim();
 
@@ -699,17 +679,36 @@
             btn.innerText = "Accesso in corso...";
 
             try {
-                const { data, error } = await db.auth.signInWithPassword({ email, password });
-                
-                if (error) {
-                    alert('❌ Accesso fallito: ' + error.message);
+                const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_KEY
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('❌ Accesso fallito: ' + (data.error_description || data.msg || 'Credenziali errate'));
                     btn.disabled = false;
                     btn.innerText = "Accedi Ora";
                     return;
                 }
 
                 if (data && data.user) {
+                    const myMember = matchMember(data.user.id);
+                    currentUser = {
+                        id: String(data.user.id).trim(),
+                        name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
+                        role: myMember?.role || data.user.user_metadata?.role || 'Aderente',
+                        avatar: myMember?.avatar || data.user.user_metadata?.avatar || 'https://picsum.photos/seed/user/200'
+                    };
+
+                    localStorage.setItem('twl_logged_user', JSON.stringify(currentUser));
                     closeAuthModal();
+                    updateUserUI();
                     await loadCloudData();
                 }
             } catch (err) {
@@ -720,10 +719,8 @@
             btn.innerText = "Accedi Ora";
         }
 
+        // REGISTRAZIONE NATIVA HTTP
         async function executeRegister() {
-            const db = getSupabase();
-            if (!db) return alert("❌ Errore connettività.");
-
             const name = document.getElementById('regNameInput').value.trim();
             const role = document.getElementById('regRoleInput').value.trim();
             const email = document.getElementById('regEmailInput').value.trim();
@@ -748,22 +745,49 @@
 
                 if (!avatar) avatar = `https://picsum.photos/seed/${Date.now()}/200`;
 
-                const { data, error } = await db.auth.signUp({
-                    email,
-                    password,
-                    options: { data: { name, role, avatar } }
+                const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_KEY
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        data: { name, role, avatar }
+                    })
                 });
 
-                if (error) {
-                    alert('❌ Registrazione fallita: ' + error.message);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('❌ Registrazione fallita: ' + (data.msg || data.message || 'Errore durante la registrazione'));
                     btn.disabled = false;
                     btn.innerText = "Crea Account TWL";
                     return;
                 }
 
                 if (data.user) {
-                    await db.from('membri').upsert([{ id: data.user.id, name, role, avatar }]);
+                    await fetch(`${SUPABASE_URL}/rest/v1/membri`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        },
+                        body: JSON.stringify([{ id: data.user.id, name, role, avatar }])
+                    });
+
+                    currentUser = {
+                        id: String(data.user.id).trim(),
+                        name,
+                        role,
+                        avatar
+                    };
+                    localStorage.setItem('twl_logged_user', JSON.stringify(currentUser));
+
                     closeAuthModal();
+                    updateUserUI();
                     await loadCloudData();
                 }
             } catch (err) {
@@ -775,8 +799,7 @@
         }
 
         async function executeEditProfile() {
-            const db = getSupabase();
-            if (!currentUser || !db) return;
+            if (!currentUser) return;
 
             const editFileInput = document.getElementById('editFileInput');
             let newAvatar = document.getElementById('editAvatarInput').value.trim();
@@ -792,18 +815,27 @@
             if (!newAvatar) return alert('Seleziona un file o un URL.');
 
             currentUser.avatar = newAvatar;
-            await db.from('membri').upsert([{ id: currentUser.id, name: currentUser.name, role: currentUser.role, avatar: newAvatar }]);
-            await db.auth.updateUser({ data: { avatar: newAvatar } });
+            localStorage.setItem('twl_logged_user', JSON.stringify(currentUser));
+
+            try {
+                await fetch(`${SUPABASE_URL}/rest/v1/membri?id=eq.${currentUser.id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    },
+                    body: JSON.stringify({ avatar: newAvatar })
+                });
+            } catch(e) {}
 
             closeEditProfileModal();
+            updateUserUI();
             await loadCloudData();
         }
 
         async function logout() {
-            const db = getSupabase();
-            if (db) {
-                await db.auth.signOut();
-            }
+            localStorage.removeItem('twl_logged_user');
             currentUser = null;
             updateUserUI();
             await loadCloudData();
@@ -846,7 +878,7 @@
 
                 if (!response.ok) {
                     const errText = await response.text();
-                    alert("⚠️️ Errore risposta Supabase: " + errText);
+                    alert("⚠️ Errore risposta Supabase: " + errText);
                 }
             } catch (err) {
                 alert("⚠️ Errore di rete: " + err.message);
