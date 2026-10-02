@@ -435,6 +435,11 @@
             });
         }
 
+        function getMemberCanonicalId(memberId) {
+            const found = matchMember(memberId);
+            return found ? String(found.id).trim().toLowerCase() : String(memberId).trim().toLowerCase();
+        }
+
         async function loadCloudData() {
             const db = getSupabase();
             if (!db) return;
@@ -457,27 +462,28 @@
                     });
                 }
 
-                // 2. Scarica le emozioni e COMPATTA per prendere SOLO L'ULTIMA per ciascun utente
+                // 2. Scarica i post ordinati dal più recente
                 const { data: postsData } = await db
                     .from('umori')
                     .select('*')
                     .order('id', { ascending: false });
 
                 if (postsData && postsData.length > 0) {
-                    const uniqueUserPosts = new Map();
+                    // COMPATTAZIONE GARANTITA SULL'AUTORE CANONICO
+                    const uniqueMap = new Map();
+
                     postsData.forEach(p => {
                         const mId = p.memberId || p.member_id;
                         if (mId) {
-                            const foundMember = matchMember(mId);
-                            const key = foundMember ? foundMember.id : String(mId).trim().toLowerCase();
-                            // Essendo ordinati dal più recente (id desc), inseriamo solo il primo valore trovato
-                            if (!uniqueUserPosts.has(key)) {
-                                uniqueUserPosts.set(key, p);
+                            const canonicalKey = getMemberCanonicalId(mId);
+                            // Essendo ordinati desc per ID, salviamo solo la prima occorrenza (la più recente)
+                            if (!uniqueMap.has(canonicalKey)) {
+                                uniqueMap.set(canonicalKey, p);
                             }
                         }
                     });
 
-                    moodPosts = Array.from(uniqueUserPosts.values()).map(p => ({
+                    moodPosts = Array.from(uniqueMap.values()).map(p => ({
                         id: p.id,
                         memberId: p.memberId || p.member_id,
                         emoji: p.emoji,
@@ -496,10 +502,10 @@
                 if (authData && authData.user) {
                     const myMember = matchMember(authData.user.id);
                     currentUser = {
-                        id: authData.user.id,
+                        id: String(authData.user.id).trim(),
                         name: myMember?.name || authData.user.user_metadata?.name || 'Sebastiano Milici',
                         role: myMember?.role || authData.user.user_metadata?.role || 'Stage',
-                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/200'
+                        avatar: myMember?.avatar || authData.user.user_metadata?.avatar || 'https://picsum.photos/seed/sebastiano/200'
                     };
 
                     updateUserUI();
@@ -578,11 +584,11 @@
             filtered.forEach(post => {
                 const author = matchMember(post.memberId) || {
                     name: currentUser && post.memberId === currentUser.id ? currentUser.name : 'Sebastiano Milici',
-                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/200',
+                    avatar: currentUser && post.memberId === currentUser.id ? currentUser.avatar : 'https://picsum.photos/seed/sebastiano/200',
                     role: currentUser && post.memberId === currentUser.id ? currentUser.role : 'Stage'
                 };
 
-                const isMyPost = currentUser && matchMember(post.memberId)?.id === matchMember(currentUser.id)?.id;
+                const isMyPost = currentUser && getMemberCanonicalId(post.memberId) === getMemberCanonicalId(currentUser.id);
 
                 const card = document.createElement('article');
                 card.className = 'glass-card rounded-3xl p-5 shadow-sm hover:shadow-md transition relative overflow-hidden flex flex-col justify-between border-2 border-credem-green-500/10 dark:border-credem-yellow-400/20';
@@ -690,7 +696,7 @@
                 if (data && data.user) {
                     const myMember = matchMember(data.user.id);
                     currentUser = {
-                        id: data.user.id,
+                        id: String(data.user.id).trim(),
                         name: myMember?.name || data.user.user_metadata?.name || email.split('@')[0],
                         role: myMember?.role || data.user.user_metadata?.role || 'Aderente',
                         avatar: myMember?.avatar || data.user.user_metadata?.avatar || 'https://picsum.photos/200'
